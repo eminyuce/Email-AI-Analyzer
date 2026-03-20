@@ -6,9 +6,10 @@ spring:
     name: email-ai-analyzer
   
   datasource:
-    url: jdbc:mysql://localhost:3306/email_db
-    username: email_user
-    password: password
+    url: ${DB_URL:jdbc:mysql://localhost:3306/email_db}
+    username: ${DB_USER:email_user}
+    password: ${DB_PASSWORD:password}
+
   jpa:
     hibernate:
       ddl-auto: update
