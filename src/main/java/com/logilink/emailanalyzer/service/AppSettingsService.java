@@ -89,7 +89,7 @@ public class AppSettingsService {
     }
 
     public boolean testDatabaseConnection(String host, Integer port, String dbName, String user, String password) {
-        String url = String.format("jdbc:postgresql://%s:%d/%s", host, port, dbName);
+        String url = String.format("jdbc:mysql://%s:%d/%s", host, port, dbName);
         try (Connection conn = DriverManager.getConnection(url, user, password)) {
             return conn.isValid(5);
         } catch (Exception e) {
@@ -198,9 +198,9 @@ public class AppSettingsService {
                 .mailSslEnabled(Boolean.TRUE)
                 .systemPrompt("")
                 .dbHost("localhost")
-                .dbPort(5432)
+                .dbPort(3306)
                 .dbName("email_db")
-                .dbUsername("postgres")
+                .dbUsername("email_user")
                 .dbPassword("password")
                 .llmModel("llama3.2")
                 .llmUrl("http://localhost:11434")
