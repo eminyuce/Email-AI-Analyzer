@@ -44,19 +44,25 @@
 
                     <h6 class="border-bottom pb-2">Key Risks</h6>
                     <div class="mb-4">
-                        <span th:each="risk : ${email.keyRisks}" class="badge bg-light text-danger border border-danger me-1 mb-1" th:text="${risk}">Risk</span>
+                        <span th:each="risk : ${email.keyRisks}"
+                              class="badge bg-light text-danger border border-danger me-1 mb-1"
+                              th:text="${risk}">Risk</span>
                     </div>
 
                     <h6 class="border-bottom pb-2">Affected Stakeholders</h6>
                     <div class="mb-4">
-                        <span th:each="stakeholder : ${email.affectedStakeholders}" class="badge bg-light text-primary border border-primary me-1 mb-1" th:text="${stakeholder}">Stakeholder</span>
+                        <span th:each="stakeholder : ${email.affectedStakeholders}"
+                              class="badge bg-light text-primary border border-primary me-1 mb-1"
+                              th:text="${stakeholder}">Stakeholder</span>
                     </div>
 
                     <div th:if="${email.actionNeeded}" class="alert alert-warning border-warning">
-                        <h6 class="alert-heading"><i class="bi bi-exclamation-triangle-fill me-2"></i>Recommended Action</h6>
+                        <h6 class="alert-heading"><i class="bi bi-exclamation-triangle-fill me-2"></i>Recommended Action
+                        </h6>
                         <p class="mb-0" th:text="${email.recommendedAction}">Action description...</p>
                         <hr>
-                        <p class="mb-0 small"><strong>Estimated Response Time:</strong> <span th:text="${email.estimatedResponseTime}">24h</span></p>
+                        <p class="mb-0 small"><strong>Estimated Response Time:</strong> <span
+                                th:text="${email.estimatedResponseTime}">24h</span></p>
                     </div>
                 </div>
             </div>
@@ -80,7 +86,7 @@
                             <small th:text="${email.breakdown.businessPriority + '/40'}">37/40</small>
                         </div>
                         <div class="progress" style="height: 10px;">
-                            <div class="progress-bar bg-primary" role="progressbar" 
+                            <div class="progress-bar bg-primary" role="progressbar"
                                  th:style="'width: ' + (${email.breakdown.businessPriority} * 100 / 40) + '%'"></div>
                         </div>
                     </div>
@@ -91,7 +97,7 @@
                             <small th:text="${email.breakdown.urgency + '/30'}">28/30</small>
                         </div>
                         <div class="progress" style="height: 10px;">
-                            <div class="progress-bar bg-warning" role="progressbar" 
+                            <div class="progress-bar bg-warning" role="progressbar"
                                  th:style="'width: ' + (${email.breakdown.urgency} * 100 / 30) + '%'"></div>
                         </div>
                     </div>
@@ -102,7 +108,7 @@
                             <small th:text="${email.breakdown.actionRequired + '/20'}">19/20</small>
                         </div>
                         <div class="progress" style="height: 10px;">
-                            <div class="progress-bar bg-info" role="progressbar" 
+                            <div class="progress-bar bg-info" role="progressbar"
                                  th:style="'width: ' + (${email.breakdown.actionRequired} * 100 / 20) + '%'"></div>
                         </div>
                     </div>
@@ -113,7 +119,7 @@
                             <small th:text="${email.breakdown.financialImpact + '/10'}">8/10</small>
                         </div>
                         <div class="progress" style="height: 10px;">
-                            <div class="progress-bar bg-success" role="progressbar" 
+                            <div class="progress-bar bg-success" role="progressbar"
                                  th:style="'width: ' + (${email.breakdown.financialImpact} * 100 / 10) + '%'"></div>
                         </div>
                     </div>
@@ -124,7 +130,9 @@
             <div class="card">
                 <div class="card-body">
                     <p class="mb-1 small text-muted"><strong>ID:</strong> <span th:text="${email.emailId}">ID</span></p>
-                    <p class="mb-0 small text-muted"><strong>Processed At:</strong> <span th:text="${#temporals.format(email.processedAt, 'yyyy-MM-dd HH:mm:ss')}">Processed</span></p>
+                    <p class="mb-0 small text-muted"><strong>Processed At:</strong> <span
+                            th:text="${#temporals.format(email.processedAt, 'yyyy-MM-dd HH:mm:ss')}">Processed</span>
+                    </p>
                 </div>
             </div>
         </div>

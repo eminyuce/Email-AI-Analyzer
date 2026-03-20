@@ -1,7 +1,6 @@
 package com.logilink.emailanalyzer.repository;
 
 import com.logilink.emailanalyzer.domain.EmailAnalysis;
-import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 

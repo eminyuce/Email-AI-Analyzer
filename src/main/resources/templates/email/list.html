@@ -18,23 +18,36 @@
             <form th:action="@{/emails}" method="get" class="row g-3">
                 <div class="col-md-4">
                     <label for="keyword" class="form-label">Keyword</label>
-                    <input type="text" class="form-control" id="keyword" name="keyword" th:value="${keyword}" placeholder="Subject or Sender...">
+                    <input type="text" class="form-control" id="keyword" name="keyword" th:value="${keyword}"
+                           placeholder="Subject or Sender...">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Criticality</label>
                     <div class="d-flex gap-2">
                         <select class="form-select" name="criticalityLevels" multiple size="3">
-                            <option value="CRITICAL" th:selected="${criticalityLevels != null && criticalityLevels.contains('CRITICAL')}">CRITICAL</option>
-                            <option value="HIGH" th:selected="${criticalityLevels != null && criticalityLevels.contains('HIGH')}">HIGH</option>
-                            <option value="MEDIUM" th:selected="${criticalityLevels != null && criticalityLevels.contains('MEDIUM')}">MEDIUM</option>
-                            <option value="LOW" th:selected="${criticalityLevels != null && criticalityLevels.contains('LOW')}">LOW</option>
+                            <option value="CRITICAL"
+                                    th:selected="${criticalityLevels != null && criticalityLevels.contains('CRITICAL')}">
+                                CRITICAL
+                            </option>
+                            <option value="HIGH"
+                                    th:selected="${criticalityLevels != null && criticalityLevels.contains('HIGH')}">
+                                HIGH
+                            </option>
+                            <option value="MEDIUM"
+                                    th:selected="${criticalityLevels != null && criticalityLevels.contains('MEDIUM')}">
+                                MEDIUM
+                            </option>
+                            <option value="LOW"
+                                    th:selected="${criticalityLevels != null && criticalityLevels.contains('LOW')}">LOW
+                            </option>
                         </select>
                     </div>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Action Needed</label>
                     <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="actionNeeded" name="actionNeeded" value="true" th:checked="${actionNeeded == true}">
+                        <input class="form-check-input" type="checkbox" id="actionNeeded" name="actionNeeded"
+                               value="true" th:checked="${actionNeeded == true}">
                         <label class="form-check-label" for="actionNeeded">Required</label>
                     </div>
                 </div>
@@ -81,8 +94,10 @@
                         <td th:text="${#temporals.format(email.emailDate, 'yyyy-MM-dd HH:mm')}">Date</td>
                         <td th:text="${#temporals.format(email.processedAt, 'yyyy-MM-dd HH:mm')}">Processed</td>
                         <td>
-                            <i th:if="${email.actionNeeded}" class="bi bi-exclamation-circle-fill text-danger" title="Action Needed"></i>
-                            <i th:unless="${email.actionNeeded}" class="bi bi-check-circle-fill text-success" title="No Action"></i>
+                            <i th:if="${email.actionNeeded}" class="bi bi-exclamation-circle-fill text-danger"
+                               title="Action Needed"></i>
+                            <i th:unless="${email.actionNeeded}" class="bi bi-check-circle-fill text-success"
+                               title="No Action"></i>
                         </td>
                         <td>
                             <a th:href="@{/emails/{id}(id=${email.emailId})}" class="btn btn-sm btn-outline-primary">
@@ -97,17 +112,19 @@
                 </table>
             </div>
         </div>
-        
+
         <!-- Pagination -->
         <div class="card-footer" th:if="${page.totalPages > 1}">
             <nav aria-label="Page navigation">
                 <ul class="pagination justify-content-center mb-0">
                     <li class="page-item" th:classappend="${page.first ? 'disabled' : ''}">
-                        <a class="page-link" th:href="@{/emails(page=${page.number - 1}, keyword=${keyword})}">Previous</a>
+                        <a class="page-link"
+                           th:href="@{/emails(page=${page.number - 1}, keyword=${keyword})}">Previous</a>
                     </li>
                     <li class="page-item" th:each="i : ${#numbers.sequence(0, page.totalPages - 1)}"
                         th:classappend="${page.number == i ? 'active' : ''}">
-                        <a class="page-link" th:href="@{/emails(page=${i}, keyword=${keyword})}" th:text="${i + 1}">1</a>
+                        <a class="page-link" th:href="@{/emails(page=${i}, keyword=${keyword})}"
+                           th:text="${i + 1}">1</a>
                     </li>
                     <li class="page-item" th:classappend="${page.last ? 'disabled' : ''}">
                         <a class="page-link" th:href="@{/emails(page=${page.number + 1}, keyword=${keyword})}">Next</a>
