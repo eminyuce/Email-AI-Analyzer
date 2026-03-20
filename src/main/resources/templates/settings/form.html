@@ -18,7 +18,8 @@
 
     <div id="test-alert" class="alert d-none alert-dismissible fade show" role="alert">
         <span id="test-message"></span>
-        <button type="button" class="btn-close" onclick="document.getElementById('test-alert').classList.add('d-none')"></button>
+        <button type="button" class="btn-close"
+                onclick="document.getElementById('test-alert').classList.add('d-none')"></button>
     </div>
 
     <form id="settingsForm" th:action="@{/settings}" th:object="${settingsForm}" method="post" class="row g-3">
@@ -26,19 +27,29 @@
         <div class="col-md-12">
             <div class="card">
                 <div class="card-header bg-light">
-                    <h5 class="mb-0"><i class="bi bi-envelope me-2"></i>Email Server</h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="bi bi-envelope me-2"></i>Email Server</h5>
+                        <button type="button" id="btn-test-smtp" class="btn btn-sm btn-outline-secondary">
+                            <span id="smtp-spinner" class="spinner-border spinner-border-sm d-none"
+                                  role="status"></span>
+                            Test SMTP
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label for="mailHost" class="form-label">Mail Host</label>
-                            <input id="mailHost" type="text" class="form-control" th:field="*{mailHost}" placeholder="imap.gmail.com">
-                            <div class="text-danger small mt-1" th:if="${#fields.hasErrors('mailHost')}" th:errors="*{mailHost}"></div>
+                            <input id="mailHost" type="text" class="form-control" th:field="*{mailHost}"
+                                   placeholder="imap.gmail.com">
+                            <div class="text-danger small mt-1" th:if="${#fields.hasErrors('mailHost')}"
+                                 th:errors="*{mailHost}"></div>
                         </div>
                         <div class="col-md-3">
                             <label for="mailPort" class="form-label">Mail Port</label>
                             <input id="mailPort" type="number" class="form-control" th:field="*{mailPort}">
-                            <div class="text-danger small mt-1" th:if="${#fields.hasErrors('mailPort')}" th:errors="*{mailPort}"></div>
+                            <div class="text-danger small mt-1" th:if="${#fields.hasErrors('mailPort')}"
+                                 th:errors="*{mailPort}"></div>
                         </div>
                         <div class="col-md-3">
                             <label for="mailSslEnabled" class="form-label">SSL</label>
@@ -100,22 +111,29 @@
         <!-- LLM Section -->
         <div class="col-md-6">
             <div class="card h-100">
-                <div class="card-header bg-light">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
                     <h5 class="mb-0"><i class="bi bi-cpu me-2"></i>LLM Model (Ollama)</h5>
+                    <button type="button" id="btn-test-ai" class="btn btn-sm btn-outline-secondary">
+                        <span id="ai-spinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                        Test AI Chat
+                    </button>
                 </div>
                 <div class="card-body">
                     <div class="row g-3">
                         <div class="col-md-12">
                             <label for="llmUrl" class="form-label">Endpoint URL</label>
-                            <input id="llmUrl" type="text" class="form-control" th:field="*{llmUrl}" placeholder="http://localhost:11434">
+                            <input id="llmUrl" type="text" class="form-control" th:field="*{llmUrl}"
+                                   placeholder="http://localhost:11434">
                         </div>
                         <div class="col-md-8">
                             <label for="llmModel" class="form-label">Model Name</label>
-                            <input id="llmModel" type="text" class="form-control" th:field="*{llmModel}" placeholder="llama3.2">
+                            <input id="llmModel" type="text" class="form-control" th:field="*{llmModel}"
+                                   placeholder="llama3.2">
                         </div>
                         <div class="col-md-4">
                             <label for="llmTemperature" class="form-label">Temperature</label>
-                            <input id="llmTemperature" type="number" step="0.1" class="form-control" th:field="*{llmTemperature}">
+                            <input id="llmTemperature" type="number" step="0.1" class="form-control"
+                                   th:field="*{llmTemperature}">
                         </div>
                     </div>
                 </div>
@@ -134,6 +152,52 @@
             </div>
         </div>
 
+        <!-- Scheduler Section -->
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Email Processing Scheduler</h5>
+                    <span id="scheduler-status"
+                          class="badge"
+                          th:classappend="${schedulerRunning} ? ' bg-success' : ' bg-secondary'"
+                          th:text="${schedulerRunning} ? 'Running' : 'Stopped'">Stopped</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-7">
+                            <label for="schedulerCron" class="form-label">Cron Expression</label>
+                            <input id="schedulerCron" type="text" class="form-control" th:field="*{schedulerCron}"
+                                   placeholder="0 */5 * * * *">
+                            <div class="form-text">Use 6-field Spring cron format (second minute hour day month
+                                weekday).
+                            </div>
+                            <div class="text-danger small mt-1" th:if="${#fields.hasErrors('schedulerCron')}"
+                                 th:errors="*{schedulerCron}"></div>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="schedulerEnabled" class="form-label">Auto Start</label>
+                            <select id="schedulerEnabled" class="form-select" th:field="*{schedulerEnabled}">
+                                <option th:value="true">Enabled</option>
+                                <option th:value="false">Disabled</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 d-flex gap-2">
+                            <button type="button" id="btn-start-scheduler" class="btn btn-success w-100">
+                                <span id="start-scheduler-spinner" class="spinner-border spinner-border-sm d-none"
+                                      role="status"></span>
+                                Start
+                            </button>
+                            <button type="button" id="btn-stop-scheduler" class="btn btn-outline-danger w-100">
+                                <span id="stop-scheduler-spinner" class="spinner-border spinner-border-sm d-none"
+                                      role="status"></span>
+                                Stop
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="col-12 mb-4">
             <button type="submit" class="btn btn-primary btn-lg px-5">
                 <i class="bi bi-check-lg me-2"></i>Save All Settings
@@ -142,19 +206,19 @@
     </form>
 
     <script th:inline="javascript">
-        document.getElementById('btn-test-db').addEventListener('click', function() {
-            const btn = this;
-            const spinner = document.getElementById('test-spinner');
+        function runTest(url, buttonId, spinnerId) {
+            const btn = document.getElementById(buttonId);
+            const spinner = document.getElementById(spinnerId);
             const alert = document.getElementById('test-alert');
             const msg = document.getElementById('test-message');
-            
+
             btn.disabled = true;
             spinner.classList.remove('d-none');
             alert.classList.add('d-none');
 
             const formData = new FormData(document.getElementById('settingsForm'));
-            
-            fetch(/*[[@{/settings/test-db}]]*/ '/settings/test-db', {
+
+            fetch(url, {
                 method: 'POST',
                 body: formData
             })
@@ -164,7 +228,7 @@
                 alert.classList.add(data.success ? 'alert-success' : 'alert-danger');
                 msg.textContent = data.message;
             })
-            .catch(error => {
+            .catch(() => {
                 alert.classList.remove('d-none', 'alert-success');
                 alert.classList.add('alert-danger');
                 msg.textContent = 'An error occurred during testing.';
@@ -173,6 +237,65 @@
                 btn.disabled = false;
                 spinner.classList.add('d-none');
             });
+        }
+
+        function runSchedulerAction(url, buttonId, spinnerId) {
+            const btn = document.getElementById(buttonId);
+            const spinner = document.getElementById(spinnerId);
+            const alert = document.getElementById('test-alert');
+            const msg = document.getElementById('test-message');
+            const status = document.getElementById('scheduler-status');
+            const formData = new FormData(document.getElementById('settingsForm'));
+
+            btn.disabled = true;
+            spinner.classList.remove('d-none');
+            alert.classList.add('d-none');
+
+            fetch(url, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert.classList.remove('d-none', 'alert-success', 'alert-danger');
+                alert.classList.add(data.success ? 'alert-success' : 'alert-danger');
+                msg.textContent = data.message;
+
+                if (typeof data.running === 'boolean') {
+                    status.classList.remove('bg-success', 'bg-secondary');
+                    status.classList.add(data.running ? 'bg-success' : 'bg-secondary');
+                    status.textContent = data.running ? 'Running' : 'Stopped';
+                }
+            })
+            .catch(() => {
+                alert.classList.remove('d-none', 'alert-success');
+                alert.classList.add('alert-danger');
+                msg.textContent = 'An error occurred during scheduler action.';
+            })
+            .finally(() => {
+                btn.disabled = false;
+                spinner.classList.add('d-none');
+            });
+        }
+
+        document.getElementById('btn-test-db').addEventListener('click', function() {
+            runTest(/*[[@{/settings/test-db}]]*/ '/settings/test-db', 'btn-test-db', 'test-spinner');
+        });
+
+        document.getElementById('btn-test-smtp').addEventListener('click', function() {
+            runTest(/*[[@{/settings/test-smtp}]]*/ '/settings/test-smtp', 'btn-test-smtp', 'smtp-spinner');
+        });
+
+        document.getElementById('btn-test-ai').addEventListener('click', function() {
+            runTest(/*[[@{/settings/test-ai}]]*/ '/settings/test-ai', 'btn-test-ai', 'ai-spinner');
+        });
+
+        document.getElementById('btn-start-scheduler').addEventListener('click', function() {
+            runSchedulerAction(/*[[@{/settings/scheduler/start}]]*/ '/settings/scheduler/start', 'btn-start-scheduler', 'start-scheduler-spinner');
+        });
+
+        document.getElementById('btn-stop-scheduler').addEventListener('click', function() {
+            runSchedulerAction(/*[[@{/settings/scheduler/stop}]]*/ '/settings/scheduler/stop', 'btn-stop-scheduler', 'stop-scheduler-spinner');
         });
     </script>
 </div>

@@ -1,25 +1,110 @@
 package com.logilink.emailanalyzer.scheduler;
 
 import com.logilink.emailanalyzer.service.AnalysisService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
+import com.logilink.emailanalyzer.service.AppSettingsService;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.scheduling.support.CronExpression;
+import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Component;
 
+import java.util.concurrent.ScheduledFuture;
+
 @Component
-@RequiredArgsConstructor
-@Slf4j
 public class EmailScheduler {
 
-    private final AnalysisService analysisService;
+    private static final Logger log = LoggerFactory.getLogger(EmailScheduler.class);
 
-    @Scheduled(cron = "${email.analysis.cron}")
-    public void scheduleEmailAnalysis() {
+    private final AnalysisService analysisService;
+    private final AppSettingsService appSettingsService;
+    private final ThreadPoolTaskScheduler taskScheduler;
+    private ScheduledFuture<?> scheduledTask;
+    private volatile boolean running;
+    private volatile String currentCron;
+
+    public EmailScheduler(AnalysisService analysisService, AppSettingsService appSettingsService) {
+        this.analysisService = analysisService;
+        this.appSettingsService = appSettingsService;
+        this.taskScheduler = new ThreadPoolTaskScheduler();
+        this.taskScheduler.setPoolSize(1);
+        this.taskScheduler.setThreadNamePrefix("email-scheduler-");
+        this.taskScheduler.initialize();
+    }
+
+    @PostConstruct
+    public void init() {
+        String cron = appSettingsService.getSchedulerCronOrDefault();
+        boolean enabled = Boolean.TRUE.equals(appSettingsService.getOrCreate().getSchedulerEnabled());
+        if (enabled) {
+            startInternal(cron);
+        } else {
+            this.currentCron = cron;
+        }
+    }
+
+    @PreDestroy
+    public synchronized void shutdown() {
+        cancelCurrentTask();
+        taskScheduler.shutdown();
+    }
+
+    public synchronized boolean isRunning() {
+        return running;
+    }
+
+    public synchronized String getCurrentCron() {
+        return currentCron != null ? currentCron : appSettingsService.getSchedulerCronOrDefault();
+    }
+
+    public synchronized void startWithCurrentSettings() {
+        String cron = appSettingsService.getSchedulerCronOrDefault();
+        startInternal(cron);
+        appSettingsService.updateSchedulerEnabled(true);
+    }
+
+    public synchronized void stopProcessing() {
+        cancelCurrentTask();
+        running = false;
+        appSettingsService.updateSchedulerEnabled(false);
+        log.info("Email processing scheduler stopped.");
+    }
+
+    public synchronized void applyCron(String cron) {
+        this.currentCron = cron;
+        if (running) {
+            startInternal(cron);
+        }
+    }
+
+    private void startInternal(String cron) {
+        validateCron(cron);
+        cancelCurrentTask();
+        this.currentCron = cron;
+        this.scheduledTask = taskScheduler.schedule(this::runScheduledJob, new CronTrigger(cron));
+        this.running = true;
+        log.info("Email processing scheduler started with cron: {}", cron);
+    }
+
+    private void runScheduledJob() {
         log.info("Starting scheduled email analysis job...");
         try {
             analysisService.processEmails();
         } catch (Exception e) {
             log.error("Error in scheduled email analysis: {}", e.getMessage());
         }
+    }
+
+    private void cancelCurrentTask() {
+        if (scheduledTask != null) {
+            scheduledTask.cancel(false);
+            scheduledTask = null;
+        }
+    }
+
+    private void validateCron(String cron) {
+        CronExpression.parse(cron);
     }
 }

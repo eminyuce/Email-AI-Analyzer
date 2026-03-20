@@ -1,17 +1,8 @@
 package com.logilink.emailanalyzer.model;
 
 import com.logilink.emailanalyzer.domain.AppSettings;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import jakarta.validation.constraints.*;
 
-@Getter
-@Setter
-@NoArgsConstructor
 public class SettingsForm {
 
     @NotBlank(message = "Mail host is required")
@@ -60,6 +51,16 @@ public class SettingsForm {
     @NotNull(message = "LLM temperature is required")
     private Double llmTemperature;
 
+    @NotNull(message = "Scheduler enabled is required")
+    private Boolean schedulerEnabled;
+
+    @NotBlank(message = "Cron expression is required")
+    @Pattern(regexp = "^\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+$", message = "Cron must have 6 fields")
+    private String schedulerCron;
+
+    public SettingsForm() {
+    }
+
     public static SettingsForm from(AppSettings settings) {
         SettingsForm form = new SettingsForm();
         form.setMailHost(settings.getMailHost());
@@ -68,17 +69,148 @@ public class SettingsForm {
         form.setMailPassword(settings.getMailPassword());
         form.setMailSslEnabled(settings.getMailSslEnabled());
         form.setSystemPrompt(settings.getSystemPrompt());
-        
+
         form.setDbHost(settings.getDbHost());
         form.setDbPort(settings.getDbPort());
         form.setDbName(settings.getDbName());
         form.setDbUsername(settings.getDbUsername());
         form.setDbPassword(settings.getDbPassword());
-        
+
         form.setLlmModel(settings.getLlmModel());
         form.setLlmUrl(settings.getLlmUrl());
         form.setLlmTemperature(settings.getLlmTemperature());
-        
+        form.setSchedulerEnabled(settings.getSchedulerEnabled());
+        form.setSchedulerCron(settings.getSchedulerCron());
+
         return form;
+    }
+
+    // Getters and Setters
+    public String getMailHost() {
+        return mailHost;
+    }
+
+    public void setMailHost(String mailHost) {
+        this.mailHost = mailHost;
+    }
+
+    public Integer getMailPort() {
+        return mailPort;
+    }
+
+    public void setMailPort(Integer mailPort) {
+        this.mailPort = mailPort;
+    }
+
+    public String getMailUsername() {
+        return mailUsername;
+    }
+
+    public void setMailUsername(String mailUsername) {
+        this.mailUsername = mailUsername;
+    }
+
+    public String getMailPassword() {
+        return mailPassword;
+    }
+
+    public void setMailPassword(String mailPassword) {
+        this.mailPassword = mailPassword;
+    }
+
+    public Boolean getMailSslEnabled() {
+        return mailSslEnabled;
+    }
+
+    public void setMailSslEnabled(Boolean mailSslEnabled) {
+        this.mailSslEnabled = mailSslEnabled;
+    }
+
+    public String getSystemPrompt() {
+        return systemPrompt;
+    }
+
+    public void setSystemPrompt(String systemPrompt) {
+        this.systemPrompt = systemPrompt;
+    }
+
+    public String getDbHost() {
+        return dbHost;
+    }
+
+    public void setDbHost(String dbHost) {
+        this.dbHost = dbHost;
+    }
+
+    public Integer getDbPort() {
+        return dbPort;
+    }
+
+    public void setDbPort(Integer dbPort) {
+        this.dbPort = dbPort;
+    }
+
+    public String getDbName() {
+        return dbName;
+    }
+
+    public void setDbName(String dbName) {
+        this.dbName = dbName;
+    }
+
+    public String getDbUsername() {
+        return dbUsername;
+    }
+
+    public void setDbUsername(String dbUsername) {
+        this.dbUsername = dbUsername;
+    }
+
+    public String getDbPassword() {
+        return dbPassword;
+    }
+
+    public void setDbPassword(String dbPassword) {
+        this.dbPassword = dbPassword;
+    }
+
+    public String getLlmModel() {
+        return llmModel;
+    }
+
+    public void setLlmModel(String llmModel) {
+        this.llmModel = llmModel;
+    }
+
+    public String getLlmUrl() {
+        return llmUrl;
+    }
+
+    public void setLlmUrl(String llmUrl) {
+        this.llmUrl = llmUrl;
+    }
+
+    public Double getLlmTemperature() {
+        return llmTemperature;
+    }
+
+    public void setLlmTemperature(Double llmTemperature) {
+        this.llmTemperature = llmTemperature;
+    }
+
+    public Boolean getSchedulerEnabled() {
+        return schedulerEnabled;
+    }
+
+    public void setSchedulerEnabled(Boolean schedulerEnabled) {
+        this.schedulerEnabled = schedulerEnabled;
+    }
+
+    public String getSchedulerCron() {
+        return schedulerCron;
+    }
+
+    public void setSchedulerCron(String schedulerCron) {
+        this.schedulerCron = schedulerCron;
     }
 }

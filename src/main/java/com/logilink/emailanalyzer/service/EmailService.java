@@ -6,8 +6,8 @@ import jakarta.mail.*;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
 import jakarta.mail.search.FlagTerm;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -16,16 +16,19 @@ import java.util.List;
 import java.util.Properties;
 
 @Service
-@Slf4j
-@RequiredArgsConstructor
 public class EmailService {
+
+    private static final Logger log = LoggerFactory.getLogger(EmailService.class);
 
     private final AppSettingsService appSettingsService;
 
-    public List<Message> fetchUnreadEmails() {
-        List<Message> unreadMessages = new ArrayList<>();
-        AppSettings settings = appSettingsService.getRequiredMailSettings();
+    public EmailService(AppSettingsService appSettingsService) {
+        this.appSettingsService = appSettingsService;
+    }
 
+    public List<Message> fetchUnreadEmails() {
+        AppSettings settings = appSettingsService.getRequiredMailSettings();
+        List<Message> unreadMessages = new ArrayList<>();
         Properties properties = new Properties();
         properties.put("mail.store.protocol", "imaps");
         properties.put("mail.imaps.host", settings.getMailHost());
@@ -44,14 +47,14 @@ public class EmailService {
             for (Message message : messages) {
                 unreadMessages.add(message);
             }
-            
+
         } catch (Exception e) {
             log.error("Error fetching emails: {}", e.getMessage());
             throw new EmailAnalysisException("Failed to fetch emails", e);
         }
         return unreadMessages;
     }
-    
+
     public String getEmailId(Message message) throws MessagingException {
         if (message instanceof MimeMessage) {
             return ((MimeMessage) message).getMessageID();

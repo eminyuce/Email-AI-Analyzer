@@ -2,7 +2,6 @@ package com.logilink.emailanalyzer.controller;
 
 import com.logilink.emailanalyzer.domain.EmailAnalysis;
 import com.logilink.emailanalyzer.service.EmailAnalysisService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -20,10 +19,13 @@ import java.util.List;
 
 @Controller
 @RequestMapping("/emails")
-@RequiredArgsConstructor
 public class EmailAnalysisController {
 
     private final EmailAnalysisService service;
+
+    public EmailAnalysisController(EmailAnalysisService service) {
+        this.service = service;
+    }
 
     @GetMapping
     public String list(
@@ -37,7 +39,7 @@ public class EmailAnalysisController {
             Model model
     ) {
         Page<EmailAnalysis> page = service.search(keyword, criticalityLevels, actionNeeded, dateFrom, dateTo, stakeholders, pageable);
-        
+
         model.addAttribute("page", page);
         model.addAttribute("keyword", keyword);
         model.addAttribute("criticalityLevels", criticalityLevels);
@@ -45,7 +47,7 @@ public class EmailAnalysisController {
         model.addAttribute("dateFrom", dateFrom);
         model.addAttribute("dateTo", dateTo);
         model.addAttribute("stakeholders", stakeholders);
-        
+
         return "email/list";
     }
 
