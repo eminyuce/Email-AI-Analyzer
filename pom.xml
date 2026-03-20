@@ -92,6 +92,7 @@
     </repositories>
 
     <build>
+        <finalName>email-analyser-ai-tool</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
