@@ -36,18 +36,18 @@ public class EmailAnalysis {
     private String criticalityLevel;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb")
+    @Column(columnDefinition = "json")
     private Breakdown breakdown;
 
     @Column(columnDefinition = "TEXT")
     private String summary;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "key_risks", columnDefinition = "jsonb")
+    @Column(name = "key_risks", columnDefinition = "json")
     private List<String> keyRisks;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "affected_stakeholders", columnDefinition = "jsonb")
+    @Column(name = "affected_stakeholders", columnDefinition = "json")
     private List<String> affectedStakeholders;
 
     @Column(name = "action_needed")

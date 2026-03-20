@@ -25,6 +25,11 @@ import java.util.Properties;
 public class AppSettingsService {
 
     private static final Logger log = LoggerFactory.getLogger(AppSettingsService.class);
+    private static final String DEFAULT_DB_HOST = "localhost";
+    private static final int DEFAULT_DB_PORT = 3306;
+    private static final String DEFAULT_DB_NAME = "email_db";
+    private static final String DEFAULT_DB_USERNAME = "email_user";
+    private static final String DEFAULT_DB_PASSWORD = "password";
 
     private final AppSettingsRepository repository;
 
@@ -34,8 +39,13 @@ public class AppSettingsService {
 
     @Transactional
     public AppSettings getOrCreate() {
-        return repository.findById(AppSettings.SINGLETON_ID)
+        AppSettings settings = repository.findById(AppSettings.SINGLETON_ID)
                 .orElseGet(this::createDefault);
+
+        if (applyDefaultMysqlSettingsIfMissing(settings)) {
+            return repository.save(settings);
+        }
+        return settings;
     }
 
     @Transactional
@@ -89,8 +99,14 @@ public class AppSettingsService {
     }
 
     public boolean testDatabaseConnection(String host, Integer port, String dbName, String user, String password) {
-        String url = String.format("jdbc:mysql://%s:%d/%s", host, port, dbName);
-        try (Connection conn = DriverManager.getConnection(url, user, password)) {
+        String resolvedHost = isBlank(host) ? DEFAULT_DB_HOST : trim(host);
+        int resolvedPort = (port == null) ? DEFAULT_DB_PORT : port;
+        String resolvedDb = isBlank(dbName) ? DEFAULT_DB_NAME : trim(dbName);
+        String resolvedUser = isBlank(user) ? DEFAULT_DB_USERNAME : trim(user);
+        String resolvedPassword = isBlank(password) ? DEFAULT_DB_PASSWORD : password;
+
+        String url = String.format("jdbc:mysql://%s:%d/%s", resolvedHost, resolvedPort, resolvedDb);
+        try (Connection conn = DriverManager.getConnection(url, resolvedUser, resolvedPassword)) {
             return conn.isValid(5);
         } catch (Exception e) {
             log.error("Database connection test failed: {}", e.getMessage());
@@ -197,11 +213,11 @@ public class AppSettingsService {
                 .mailPassword("")
                 .mailSslEnabled(Boolean.TRUE)
                 .systemPrompt("")
-                .dbHost("localhost")
-                .dbPort(3306)
-                .dbName("email_db")
-                .dbUsername("email_user")
-                .dbPassword("password")
+                .dbHost(DEFAULT_DB_HOST)
+                .dbPort(DEFAULT_DB_PORT)
+                .dbName(DEFAULT_DB_NAME)
+                .dbUsername(DEFAULT_DB_USERNAME)
+                .dbPassword(DEFAULT_DB_PASSWORD)
                 .llmModel("llama3.2")
                 .llmUrl("http://localhost:11434")
                 .llmTemperature(0.3)
@@ -240,5 +256,32 @@ public class AppSettingsService {
         } catch (Exception ex) {
             throw new EmailAnalysisException("Invalid cron expression. Use 6-field Spring cron format.", ex);
         }
+    }
+
+    private boolean applyDefaultMysqlSettingsIfMissing(AppSettings settings) {
+        boolean changed = false;
+
+        if (isBlank(settings.getDbHost())) {
+            settings.setDbHost(DEFAULT_DB_HOST);
+            changed = true;
+        }
+        if (settings.getDbPort() == null) {
+            settings.setDbPort(DEFAULT_DB_PORT);
+            changed = true;
+        }
+        if (isBlank(settings.getDbName())) {
+            settings.setDbName(DEFAULT_DB_NAME);
+            changed = true;
+        }
+        if (isBlank(settings.getDbUsername())) {
+            settings.setDbUsername(DEFAULT_DB_USERNAME);
+            changed = true;
+        }
+        if (isBlank(settings.getDbPassword())) {
+            settings.setDbPassword(DEFAULT_DB_PASSWORD);
+            changed = true;
+        }
+
+        return changed;
     }
 }
