@@ -19,10 +19,16 @@ jobs:
         with:
           distribution: 'corretto'
           java-version: '24'
+          # We keep the cache config but will manually purge it to ensure a clean slate
           cache: 'maven'
 
+      - name: Purge Maven Local Repository
+        run: rm -rf ~/.m2/repository/*
+        shell: bash
+
       - name: Build with Maven
-        run: mvn clean package -DskipTests
+        # -U forces update of dependencies to solve that missing MySQL driver issue
+        run: mvn clean package -DskipTests -U
 
       - name: Validate Docker Hub secrets and prepare image tag
         id: prepare
@@ -57,4 +63,11 @@ jobs:
             docker pull ${{ steps.prepare.outputs.docker_image }}
             docker stop email-ai-analyzer || true
             docker rm email-ai-analyzer || true
-            docker run -d --restart always -p 8080:8080 --name email-ai-analyzer ${{ steps.prepare.outputs.docker_image }}
+            # Mapping to 8081 because your Spring logs show the app starts on 8081
+            docker run -d --restart always \
+              -p 8081:8081 \
+              --name email-ai-analyzer \
+              -e SPRING_DATASOURCE_URL=${{ secrets.DB_URL }} \
+              -e SPRING_DATASOURCE_USERNAME=${{ secrets.DB_USER }} \
+              -e SPRING_DATASOURCE_PASSWORD=${{ secrets.DB_PASS }} \
+              ${{ steps.prepare.outputs.docker_image }}
