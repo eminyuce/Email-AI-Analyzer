@@ -1,0 +1,126 @@
+Sen 20+ yıllık kıdemli bir Java Spring Boot mimarı ve geliştiricisisin.
+Temiz kod (Clean Code), SOLID prensipleri, Spring Boot 3.x best practices, performans, güvenlik ve mükemmel kullanıcı deneyimi konusunda uzmansın.
+Her zaman production-ready, test edilebilir ve bakımı kolay kod yazarsın.
+
+**Proje Bağlamı**
+Bu proje, gelen e-postaları analiz eden bir sistemdir. Her e-posta, gelişmiş bir iş analisti AI prompt’u ile analiz edilip aşağıdaki JSON formatında EmailAnalysis entity’sine kaydedilmektedir:
+
+{
+  "email_id": "string",
+  "email_date": "datetime",
+  "subject": "orijinal subject",
+  "sender": "gönderici adı <email>",
+  "criticality_score": 92,
+  "criticality_level": "CRITICAL | HIGH | MEDIUM | LOW",
+  "breakdown": {
+    "business_priority": 37,
+    "urgency": 28,
+    "action_required": 19,
+    "financial_impact": 8
+  },
+  "summary": "Profesyonel ve öz bir özet (max 2-3 cümle)",
+  "key_risks": ["risk1", "risk2"],
+  "affected_stakeholders": ["Satış", "Finans", "Yönetim"],
+  "action_needed": true,
+  "recommended_action": "Hemen cevapla ve toplantı öner / Onay talebini yönlendir / 48 saat içinde takip et / Arşivle",
+  "estimated_response_time": "24 saat içinde",
+  "confidence": 88
+}
+
+**Görev**
+Mevcut Spring Boot uygulamasını Thymeleaf + Bootstrap 5 ile modern bir yönetim arayüzüyle zenginleştir.
+Öncelikle EmailAnalysis entity’sini JSON yapısına tam uyumlu hale getir, repository ve servis katmanlarını genişlet, ardından kullanıcı dostu liste + filtre + detay sayfası geliştir.
+
+**1. Entity Güncellemesi → EmailAnalysis.java**
+- Tüm JSON alanlarını karşılayacak şekilde entity’yi tasarla
+- email_id → @Id
+- email_date → LocalDateTime (e-postanın orijinal tarihi)
+- processed_at → LocalDateTime (analizin bittiği tarih – @CreationTimestamp kullanılabilir)
+- breakdown → @Embedded veya JSONB (PostgreSQL JSONB sütunu önerilir)
+- key_risks → @ElementCollection veya JSONB
+- affected_stakeholders → @ElementCollection veya JSONB
+- Diğer basit tipler (String, Integer, Boolean) direkt sütun
+- Lombok (@Data, @Builder, @NoArgsConstructor, @AllArgsConstructor) kullan
+- equals/hashCode sadece id üzerinden
+
+**2. Repository → EmailAnalysisRepository.java**
+- JpaRepository<EmailAnalysis, String> extend et
+- JpaSpecificationExecutor<EmailAnalysis> de implement et
+- Varsayılan metodlar:
+  - Page<EmailAnalysis> findAll(Specification<EmailAnalysis> spec, Pageable pageable)
+  - List<EmailAnalysis> findTop20ByOrderByProcessedAtDesc()
+
+**3. Specification / Filtreleme mantığı**
+JPA Specification kullanarak dinamik filtreleme oluştur:
+Filtre kriterleri:
+- keyword → subject veya sender içinde ILIKE %keyword%
+- criticalityLevels → List<String> → criticality_level IN (...)
+- urgencyLevels → List<String> → (opsiyonel – eğer breakdown içinde ayrı urgency_level varsa)
+- actionNeeded → Boolean (true/false veya null = hepsi)
+- dateFrom & dateTo → email_date BETWEEN ... 
+- stakeholders → affected_stakeholders array içinde herhangi biri eşleşiyor (JSONB @> operatörü ile)
+
+**4. Service → EmailAnalysisService.java**
+- Page<EmailAnalysis> findLatest(int page, int size)  // varsayılan son 20
+- Page<EmailAnalysis> search(
+    String keyword,
+    List<String> criticalityLevels,
+    List<String> urgencyLevels,     // opsiyonel
+    Boolean actionNeeded,
+    LocalDateTime dateFrom,
+    LocalDateTime dateTo,
+    List<String> stakeholders,
+    Pageable pageable
+  )
+- Optional<EmailAnalysis> findById(String id)
+
+**5. Controller → EmailAnalysisController.java**
+- GET /emails              → liste sayfası (sayfalama + filtre parametreleri)
+- GET /emails/{id}         → detay sayfası
+- Tüm filtre parametrelerini @RequestParam ile al (çoğu optional)
+
+**6. Thymeleaf Görseller**
+Ana liste (/emails):
+- Responsive Bootstrap 5 dashboard
+- Üstte arama input (keyword)
+- Filtre sidebar veya collapsible panel:
+  • Criticality level → multi-select (CRITICAL, HIGH, MEDIUM, LOW)
+  • Action needed     → checkbox (true / false / hepsi)
+  • Email date from – to → iki tarih seçici
+  • Stakeholders      → multi-select (dinamik olarak veritabanından çekilebilir veya sabit liste)
+- DataTable veya basit Bootstrap table
+  Sütunlar: 
+  • Criticality Score (renkli badge)
+  • Level (renkli badge)
+  • Subject
+  • Sender
+  • Email Date
+  • Processed At
+  • Action Needed (icon)
+  • Detay linki
+
+Detay sayfası (/emails/{id}):
+- Kart yapısı (Bootstrap card)
+- Başlık: Subject + Criticality badge
+- Metadata: Sender • Email Date • Processed At • Confidence
+- Breakdown skorları progress bar veya badge grid şeklinde
+- Summary paragrafı
+- Key Risks → badge list
+- Affected Stakeholders → badge list
+- Recommended Action → alert kutusu
+- Raw JSON → accordion / collapsible bölüm (pre + code)
+
+**Teknik Kurallar**
+- Java 21 + Spring Boot 3.2 / 3.3
+- Lombok + MapStruct (gerekirse)
+- Thymeleaf 3 + thymeleaf-layout-dialect
+- Bootstrap 5.3 + Bootstrap Icons / Font Awesome
+- PostgreSQL → JSONB sütunları için @JdbcTypeCode(SqlTypes.JSON) veya Jackson @JsonTypeInfo
+- Sayfalama → Spring Data Pageable + Thymeleaf fragment pagination
+- Yorum satırlarını bolca kullan
+- Kodları dosya bazında, numaralandırılmış adımlarla ver
+  Örnek:  
+  Adım 1: EmailAnalysis Entity  
+  src/main/java/.../EmailAnalysis.java  
+  ```java
+  // kod buraya

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Settings</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Application Settings</h1>
+    </div>
+
+    <div class="alert alert-success alert-dismissible fade show" role="alert" th:if="${saved}">
+        Settings saved successfully.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+
+    <div id="test-alert" class="alert d-none alert-dismissible fade show" role="alert">
+        <span id="test-message"></span>
+        <button type="button" class="btn-close" onclick="document.getElementById('test-alert').classList.add('d-none')"></button>
+    </div>
+
+    <form id="settingsForm" th:action="@{/settings}" th:object="${settingsForm}" method="post" class="row g-3">
+        <!-- Email Section -->
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0"><i class="bi bi-envelope me-2"></i>Email Server</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="mailHost" class="form-label">Mail Host</label>
+                            <input id="mailHost" type="text" class="form-control" th:field="*{mailHost}" placeholder="imap.gmail.com">
+                            <div class="text-danger small mt-1" th:if="${#fields.hasErrors('mailHost')}" th:errors="*{mailHost}"></div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="mailPort" class="form-label">Mail Port</label>
+                            <input id="mailPort" type="number" class="form-control" th:field="*{mailPort}">
+                            <div class="text-danger small mt-1" th:if="${#fields.hasErrors('mailPort')}" th:errors="*{mailPort}"></div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="mailSslEnabled" class="form-label">SSL</label>
+                            <select id="mailSslEnabled" class="form-select" th:field="*{mailSslEnabled}">
+                                <option th:value="true">Enabled</option>
+                                <option th:value="false">Disabled</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="mailUsername" class="form-label">Mail Username</label>
+                            <input id="mailUsername" type="text" class="form-control" th:field="*{mailUsername}">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="mailPassword" class="form-label">Mail Password</label>
+                            <input id="mailPassword" type="password" class="form-control" th:field="*{mailPassword}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Database Section -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-database me-2"></i>Database</h5>
+                    <button type="button" id="btn-test-db" class="btn btn-sm btn-outline-secondary">
+                        <span id="test-spinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                        Test Connection
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label for="dbHost" class="form-label">Host</label>
+                            <input id="dbHost" type="text" class="form-control" th:field="*{dbHost}">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="dbPort" class="form-label">Port</label>
+                            <input id="dbPort" type="number" class="form-control" th:field="*{dbPort}">
+                        </div>
+                        <div class="col-md-12">
+                            <label for="dbName" class="form-label">Database Name</label>
+                            <input id="dbName" type="text" class="form-control" th:field="*{dbName}">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="dbUsername" class="form-label">Username</label>
+                            <input id="dbUsername" type="text" class="form-control" th:field="*{dbUsername}">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="dbPassword" class="form-label">Password</label>
+                            <input id="dbPassword" type="password" class="form-control" th:field="*{dbPassword}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- LLM Section -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0"><i class="bi bi-cpu me-2"></i>LLM Model (Ollama)</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-12">
+                            <label for="llmUrl" class="form-label">Endpoint URL</label>
+                            <input id="llmUrl" type="text" class="form-control" th:field="*{llmUrl}" placeholder="http://localhost:11434">
+                        </div>
+                        <div class="col-md-8">
+                            <label for="llmModel" class="form-label">Model Name</label>
+                            <input id="llmModel" type="text" class="form-control" th:field="*{llmModel}" placeholder="llama3.2">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="llmTemperature" class="form-label">Temperature</label>
+                            <input id="llmTemperature" type="number" step="0.1" class="form-control" th:field="*{llmTemperature}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Prompt Section -->
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0"><i class="bi bi-chat-left-dots me-2"></i>System Prompt</h5>
+                </div>
+                <div class="card-body">
+                    <textarea id="systemPrompt" class="form-control" rows="8" th:field="*{systemPrompt}"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 mb-4">
+            <button type="submit" class="btn btn-primary btn-lg px-5">
+                <i class="bi bi-check-lg me-2"></i>Save All Settings
+            </button>
+        </div>
+    </form>
+
+    <script th:inline="javascript">
+        document.getElementById('btn-test-db').addEventListener('click', function() {
+            const btn = this;
+            const spinner = document.getElementById('test-spinner');
+            const alert = document.getElementById('test-alert');
+            const msg = document.getElementById('test-message');
+            
+            btn.disabled = true;
+            spinner.classList.remove('d-none');
+            alert.classList.add('d-none');
+
+            const formData = new FormData(document.getElementById('settingsForm'));
+            
+            fetch(/*[[@{/settings/test-db}]]*/ '/settings/test-db', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert.classList.remove('d-none', 'alert-success', 'alert-danger');
+                alert.classList.add(data.success ? 'alert-success' : 'alert-danger');
+                msg.textContent = data.message;
+            })
+            .catch(error => {
+                alert.classList.remove('d-none', 'alert-success');
+                alert.classList.add('alert-danger');
+                msg.textContent = 'An error occurred during testing.';
+            })
+            .finally(() => {
+                btn.disabled = false;
+                spinner.classList.add('d-none');
+            });
+        });
+    </script>
+</div>
+</body>
+</html>

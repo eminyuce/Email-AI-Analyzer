@@ -1,0 +1,40 @@
+Sen bir kıdemli 20 yıllık Java Spring Boot geliştiricisisin. Spring AI + Ollama kullanarak, 1080 Ti ekran kartını GPU olarak çalıştırarak bana e-posta analizi yapan bir yazılım yazacaksın. Proje Amacı: Gelen ve giden tüm e-postaları okuyup, istediğimiz analizleri yapacak bir Spring Boot uygulaması geliştir. Analiz için Ollama modellerini (yerel) kullanacağız. Teknik Gereksinimler:
+E-posta Okuma Gmail hesabı: logilinklojistik@gmail.com Şifre: 123 (geliştirme aşamasında hardcoded kalabilir, sonra OAuth2’ye çevrilecek) Gmail API veya IMAP + OAuth2 ile gelen/giden tüm e-postaları periyodik olarak okuyacak (CronJob ile her 5 dakikada bir).
+AI Entegrasyonu Spring AI kütüphanesini kullan. Ollama’ya (localhost:11434) API üzerinden istek at. 1080 Ti GPU’yu tam performansla kullan (Ollama’da CUDA_VISIBLE_DEVICES=0 veya model ayarlarında GPU desteği aktif olsun). Model tercihi: llama3.2 veya qwen2.5 (istediğin modeli kolay değiştirilebilir yap).
+Çıktı Akışı (2 aşamalı) İlk aşama: Analiz sonucunu konsola yazdır (log + güzel format). İkinci aşama: Aynı sonucu PostgreSQL veritabanına kaydet (tablo: email_analysis).
+System Prompt Uygulama başlatılırken system-prompt.txt dosyasını okuyup Spring AI’ye yükle. Dosya içeriği tam olarak şu şekilde olacak: Sen 10 yıllık deneyimli bir iş analistisin. Gelen e-postaları oku ve aşağıdaki kriterlere göre puanla (0-100 arası):
+•
+İş önceliği (Business Priority): 40 puan
+•
+Aciliyet (Urgency): 30 puan
+•
+Eylem gerekliliği (Action Required): 20 puan
+•
+Finansal etki (Financial Impact): 10 puan
+Her e-posta için JSON formatında şu çıktıyı ver: { "email_id": "string", "subject": "string", "sender": "string", "priority_score": 85, "urgency_level": "HIGH|MEDIUM|LOW", "action_needed": true, "summary": "kısa özet", "recommended_action": "Cevap ver / Takip et / Arşivle / Yönlendir" }
+Ek İstekler:
+Proje tamamen çalışır hâlde olsun (Docker + docker-compose ile PostgreSQL + Ollama birlikte çalışsın). application.yml içinde tüm konfigürasyonlar (Ollama URL, Gmail credentials, DB, model adı) dışarıdan değiştirilebilir olsun. Kod temiz, yorumlu ve Spring Boot best practice’lerine uygun olsun. İlk çalıştırmada konsola “✅ E-posta analizi başlatıldı – Ollama + 1080 Ti aktif” yazsın.
+Şimdi bu prompt’a göre tam çalışan Spring Boot projesini adım adım kodlarıyla birlikte yaz.
+Teknik Mimari & Gereksinimler:
+Email Polling (Spring Integration/Scheduling):
+Java Mail Sender ve IMAP protokolünü kullan.
+Her 5 dakikada bir çalışacak bir @Scheduled task oluştur.
+Okunan e-postaların mükerrer işlenmemesi için bir Message-ID kontrol mekanizması (Idempotency) kur.
+Spring AI + Ollama Entegrasyonu:
+spring-ai-ollama-spring-boot-starter kullan.
+GPU Optimizasyonu: Ollama'nın num_gpu ve main_gpu parametrelerini 1080 Ti (11GB VRAM) için optimize edecek OllamaOptions konfigürasyonunu yaz.
+Model Flexibility: application.yml üzerinden llama3.2, qwen2.5 veya mistral gibi modellerin kolayca değiştirilmesini sağla.
+Prompt Engineering: system-prompt.txt dosyasını ResourceLoader ile yükle ve SystemPromptTemplate kullanarak dinamikleştir.
+Veri Katmanı (PostgreSQL):
+email_analysis tablosu için JPA Entity ve Repository oluştur.
+LLM'den gelen JSON çıktısını Java POJO'ya map'le (Structured Output) ve veritabanına bu şekilde kaydet.
+Docker & Deployment:
+docker-compose.yml dosyasında şunlar olsun:
+PostgreSQL: Veri saklama için.
+Ollama: GPU desteği (deploy: resources: reservations: devices: - driver: nvidia) konfigürasyonuyla birlikte.
+Spring Boot App: Dockerize edilmiş halde.
+Kod Standartları:
+Lombok kullanımı.
+Custom Exception yönetimi (LLM timeout veya Email connection hataları için).
+Loglama için Slf4j.
+Başlangıçta: ✅ E-posta analizi başlatıldı – Ollama + 1080 Ti aktif logu
