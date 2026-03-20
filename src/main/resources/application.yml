@@ -9,15 +9,10 @@ spring:
     url: jdbc:mysql://localhost:3306/email_db
     username: email_user
     password: password
-    driver-class-name: com.mysql.cj.jdbc.Driver
-  
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: true
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.MySQLDialect
 
   ai:
     ollama:

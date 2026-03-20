@@ -16,8 +16,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.sql.Connection;
-import java.sql.DriverManager;
 import java.time.Duration;
 import java.util.Properties;
 
@@ -25,12 +23,6 @@ import java.util.Properties;
 public class AppSettingsService {
 
     private static final Logger log = LoggerFactory.getLogger(AppSettingsService.class);
-    private static final String DEFAULT_DB_HOST = "localhost";
-    private static final int DEFAULT_DB_PORT = 3306;
-    private static final String DEFAULT_DB_NAME = "email_db";
-    private static final String DEFAULT_DB_USERNAME = "email_user";
-    private static final String DEFAULT_DB_PASSWORD = "password";
-
     private final AppSettingsRepository repository;
 
     public AppSettingsService(AppSettingsRepository repository) {
@@ -39,13 +31,8 @@ public class AppSettingsService {
 
     @Transactional
     public AppSettings getOrCreate() {
-        AppSettings settings = repository.findById(AppSettings.SINGLETON_ID)
+        return repository.findById(AppSettings.SINGLETON_ID)
                 .orElseGet(this::createDefault);
-
-        if (applyDefaultMysqlSettingsIfMissing(settings)) {
-            return repository.save(settings);
-        }
-        return settings;
     }
 
     @Transactional
@@ -57,13 +44,6 @@ public class AppSettingsService {
         settings.setMailPassword(form.getMailPassword());
         settings.setMailSslEnabled(form.getMailSslEnabled());
         settings.setSystemPrompt(trim(form.getSystemPrompt()));
-
-        // New settings
-        settings.setDbHost(trim(form.getDbHost()));
-        settings.setDbPort(form.getDbPort());
-        settings.setDbName(trim(form.getDbName()));
-        settings.setDbUsername(trim(form.getDbUsername()));
-        settings.setDbPassword(form.getDbPassword());
 
         settings.setLlmModel(trim(form.getLlmModel()));
         settings.setLlmUrl(trim(form.getLlmUrl()));
@@ -96,22 +76,6 @@ public class AppSettingsService {
             throw new EmailAnalysisException("Email server settings are not configured. Please update them on /settings.");
         }
         return settings;
-    }
-
-    public boolean testDatabaseConnection(String host, Integer port, String dbName, String user, String password) {
-        String resolvedHost = isBlank(host) ? DEFAULT_DB_HOST : trim(host);
-        int resolvedPort = (port == null) ? DEFAULT_DB_PORT : port;
-        String resolvedDb = isBlank(dbName) ? DEFAULT_DB_NAME : trim(dbName);
-        String resolvedUser = isBlank(user) ? DEFAULT_DB_USERNAME : trim(user);
-        String resolvedPassword = isBlank(password) ? DEFAULT_DB_PASSWORD : password;
-
-        String url = String.format("jdbc:mysql://%s:%d/%s", resolvedHost, resolvedPort, resolvedDb);
-        try (Connection conn = DriverManager.getConnection(url, resolvedUser, resolvedPassword)) {
-            return conn.isValid(5);
-        } catch (Exception e) {
-            log.error("Database connection test failed: {}", e.getMessage());
-            return false;
-        }
     }
 
     public boolean testSmtpConnection(String host, Integer port, String user, String password, Boolean sslEnabled) {
@@ -213,11 +177,6 @@ public class AppSettingsService {
                 .mailPassword("")
                 .mailSslEnabled(Boolean.TRUE)
                 .systemPrompt("")
-                .dbHost(DEFAULT_DB_HOST)
-                .dbPort(DEFAULT_DB_PORT)
-                .dbName(DEFAULT_DB_NAME)
-                .dbUsername(DEFAULT_DB_USERNAME)
-                .dbPassword(DEFAULT_DB_PASSWORD)
                 .llmModel("llama3.2")
                 .llmUrl("http://localhost:11434")
                 .llmTemperature(0.3)
@@ -258,30 +217,4 @@ public class AppSettingsService {
         }
     }
 
-    private boolean applyDefaultMysqlSettingsIfMissing(AppSettings settings) {
-        boolean changed = false;
-
-        if (isBlank(settings.getDbHost())) {
-            settings.setDbHost(DEFAULT_DB_HOST);
-            changed = true;
-        }
-        if (settings.getDbPort() == null) {
-            settings.setDbPort(DEFAULT_DB_PORT);
-            changed = true;
-        }
-        if (isBlank(settings.getDbName())) {
-            settings.setDbName(DEFAULT_DB_NAME);
-            changed = true;
-        }
-        if (isBlank(settings.getDbUsername())) {
-            settings.setDbUsername(DEFAULT_DB_USERNAME);
-            changed = true;
-        }
-        if (isBlank(settings.getDbPassword())) {
-            settings.setDbPassword(DEFAULT_DB_PASSWORD);
-            changed = true;
-        }
-
-        return changed;
-    }
 }

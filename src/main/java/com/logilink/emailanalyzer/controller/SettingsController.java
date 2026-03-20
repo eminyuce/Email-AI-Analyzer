@@ -56,19 +56,6 @@ public class SettingsController {
         return "redirect:/settings";
     }
 
-    @PostMapping("/test-db")
-    @ResponseBody
-    public Map<String, Object> testDb(@ModelAttribute SettingsForm form) {
-        boolean success = appSettingsService.testDatabaseConnection(
-                form.getDbHost(),
-                form.getDbPort(),
-                form.getDbName(),
-                form.getDbUsername(),
-                form.getDbPassword()
-        );
-        return Map.of("success", success, "message", success ? "Connection successful!" : "Connection failed. Please check your settings.");
-    }
-
     @PostMapping("/test-smtp")
     @ResponseBody
     public Map<String, Object> testSmtp(@ModelAttribute SettingsForm form) {

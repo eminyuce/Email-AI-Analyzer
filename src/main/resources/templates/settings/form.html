@@ -71,43 +71,6 @@
             </div>
         </div>
 
-        <!-- Database Section -->
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0"><i class="bi bi-database me-2"></i>Database</h5>
-                    <button type="button" id="btn-test-db" class="btn btn-sm btn-outline-secondary">
-                        <span id="test-spinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
-                        Test Connection
-                    </button>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-8">
-                            <label for="dbHost" class="form-label">Host</label>
-                            <input id="dbHost" type="text" class="form-control" th:field="*{dbHost}">
-                        </div>
-                        <div class="col-md-4">
-                            <label for="dbPort" class="form-label">Port</label>
-                            <input id="dbPort" type="number" class="form-control" th:field="*{dbPort}">
-                        </div>
-                        <div class="col-md-12">
-                            <label for="dbName" class="form-label">Database Name</label>
-                            <input id="dbName" type="text" class="form-control" th:field="*{dbName}">
-                        </div>
-                        <div class="col-md-6">
-                            <label for="dbUsername" class="form-label">Username</label>
-                            <input id="dbUsername" type="text" class="form-control" th:field="*{dbUsername}">
-                        </div>
-                        <div class="col-md-6">
-                            <label for="dbPassword" class="form-label">Password</label>
-                            <input id="dbPassword" type="password" class="form-control" th:field="*{dbPassword}">
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- LLM Section -->
         <div class="col-md-6">
             <div class="card h-100">
@@ -277,10 +240,6 @@
                 spinner.classList.add('d-none');
             });
         }
-
-        document.getElementById('btn-test-db').addEventListener('click', function() {
-            runTest(/*[[@{/settings/test-db}]]*/ '/settings/test-db', 'btn-test-db', 'test-spinner');
-        });
 
         document.getElementById('btn-test-smtp').addEventListener('click', function() {
             runTest(/*[[@{/settings/test-smtp}]]*/ '/settings/test-smtp', 'btn-test-smtp', 'smtp-spinner');

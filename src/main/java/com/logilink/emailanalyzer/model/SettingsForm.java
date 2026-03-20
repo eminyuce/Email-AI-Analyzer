@@ -25,22 +25,6 @@ public class SettingsForm {
     @NotBlank(message = "System prompt is required")
     private String systemPrompt;
 
-    // DB Settings
-    @NotBlank(message = "DB host is required")
-    private String dbHost;
-
-    @NotNull(message = "DB port is required")
-    private Integer dbPort;
-
-    @NotBlank(message = "DB name is required")
-    private String dbName;
-
-    @NotBlank(message = "DB username is required")
-    private String dbUsername;
-
-    @NotBlank(message = "DB password is required")
-    private String dbPassword;
-
     // LLM Settings
     @NotBlank(message = "LLM model is required")
     private String llmModel;
@@ -69,12 +53,6 @@ public class SettingsForm {
         form.setMailPassword(settings.getMailPassword());
         form.setMailSslEnabled(settings.getMailSslEnabled());
         form.setSystemPrompt(settings.getSystemPrompt());
-
-        form.setDbHost(settings.getDbHost());
-        form.setDbPort(settings.getDbPort());
-        form.setDbName(settings.getDbName());
-        form.setDbUsername(settings.getDbUsername());
-        form.setDbPassword(settings.getDbPassword());
 
         form.setLlmModel(settings.getLlmModel());
         form.setLlmUrl(settings.getLlmUrl());
@@ -132,46 +110,6 @@ public class SettingsForm {
 
     public void setSystemPrompt(String systemPrompt) {
         this.systemPrompt = systemPrompt;
-    }
-
-    public String getDbHost() {
-        return dbHost;
-    }
-
-    public void setDbHost(String dbHost) {
-        this.dbHost = dbHost;
-    }
-
-    public Integer getDbPort() {
-        return dbPort;
-    }
-
-    public void setDbPort(Integer dbPort) {
-        this.dbPort = dbPort;
-    }
-
-    public String getDbName() {
-        return dbName;
-    }
-
-    public void setDbName(String dbName) {
-        this.dbName = dbName;
-    }
-
-    public String getDbUsername() {
-        return dbUsername;
-    }
-
-    public void setDbUsername(String dbUsername) {
-        this.dbUsername = dbUsername;
-    }
-
-    public String getDbPassword() {
-        return dbPassword;
-    }
-
-    public void setDbPassword(String dbPassword) {
-        this.dbPassword = dbPassword;
     }
 
     public String getLlmModel() {
