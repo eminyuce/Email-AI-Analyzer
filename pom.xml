@@ -13,7 +13,7 @@
 
     <groupId>com.logilink</groupId>
     <artifactId>email-ai-analyzer</artifactId>
-    <version>1.0.1-SNAPSHOT</version>
+    <version>"1.0.0"</version>
     <name>email-ai-analyzer</name>
     <description>Email analysis with Spring AI + Ollama</description>
 
