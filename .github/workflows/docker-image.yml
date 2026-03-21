@@ -3,16 +3,21 @@ name: Docker CI/CD
 on:
   push:
     branches: [ "master" ]
+    tags:
+      - 'v*'          # Trigger also on version tags (v1.0.0, v1.2.3-beta, etc.)
 
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME: email-ai-analyzer
+      DOCKER_REPO: guvenulu              # ← change this if your Docker Hub username/org is different
 
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # needed for git tag & describe if you want to use it
 
       - name: Set up JDK 24 (Amazon Corretto)
         uses: actions/setup-java@v4
@@ -24,37 +29,87 @@ jobs:
       - name: Build with Maven
         run: mvn clean package -DskipTests
 
-      - name: Validate Docker Hub secrets and prepare image tag
+      # ────────────────────────────────────────────────────────────────
+      # Prepare all Docker tags we want to push
+      # ────────────────────────────────────────────────────────────────
+      - name: Prepare Docker tags
         id: prepare
         run: |
-          if [ -z "${{ secrets.DOCKER_USERNAME }}" ]; then
-            echo "DOCKER_USERNAME secret is empty or missing."
-            exit 1
-          fi
-          if [ -z "${{ secrets.DOCKER_PASSWORD }}" ]; then
-            echo "DOCKER_PASSWORD secret is empty or missing."
-            exit 1
-          fi
-          DOCKER_USER_LOWER=$(echo "${{ secrets.DOCKER_USERNAME }}" | tr '[:upper:]' '[:lower:]')
-          echo "docker_image=${DOCKER_USER_LOWER}/${IMAGE_NAME}:latest" >> "$GITHUB_OUTPUT"
+          # Always available
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          IMAGE_PREFIX="${DOCKER_REPO}/${IMAGE_NAME}"
 
+          # Start with immutable sha tag + latest
+          TAGS="${IMAGE_PREFIX}:${SHORT_SHA},${IMAGE_PREFIX}:latest"
+
+          # If this is a tagged release (v1.0.0, v2.3.1, etc.)
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}          # remove 'v' prefix
+            TAGS="${TAGS},${IMAGE_PREFIX}:${VERSION}"
+            # Optional: also push without 'v' prefix if you prefer both
+            # TAGS="${TAGS},${IMAGE_PREFIX}:v${VERSION}"
+          fi
+
+          # Optional: also extract semantic version from pom.xml every time
+          # (uncomment if you want SNAPSHOT or dev versions visible too)
+          # POM_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          # CLEAN_VERSION=$(echo "$POM_VERSION" | sed 's/-SNAPSHOT//g' | tr -d '[:space:]')
+          # if [[ "$CLEAN_VERSION" != "" && "$CLEAN_VERSION" != "unknown" ]]; then
+          #   TAGS="${TAGS},${IMAGE_PREFIX}:${CLEAN_VERSION}"
+          #   if [[ "$POM_VERSION" == *SNAPSHOT* ]]; then
+          #     TAGS="${TAGS},${IMAGE_PREFIX}:${CLEAN_VERSION}-SNAPSHOT"
+          #   fi
+          # fi
+
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+          # Still use :latest for the deployment step below
+          echo "deploy_image=${IMAGE_PREFIX}:latest" >> "$GITHUB_OUTPUT"
+
+      # ────────────────────────────────────────────────────────────────
+      # Login & Build+Push (using modern official actions)
+      # ────────────────────────────────────────────────────────────────
       - name: Login to Docker Hub
-        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build Docker image
-        run: docker build -t "${{ steps.prepare.outputs.docker_image }}" .
+      - name: Build and push Docker image (multi-tag)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.prepare.outputs.tags }}
+          # Optional: add these for better caching & security
+          # cache-from: type=gha
+          # cache-to: type=gha,mode=max
 
-      - name: Push Docker image to Docker Hub
-        run: docker push "${{ steps.prepare.outputs.docker_image }}"
-
-      - name: Deploy to server via SSH
+      # ────────────────────────────────────────────────────────────────
+      # Deploy to your server (still using :latest for simplicity)
+      # ────────────────────────────────────────────────────────────────
+      - name: Deploy to production server via SSH
+        if: github.ref == 'refs/heads/master'   # only deploy on master pushes (not on tags)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
-            docker pull ${{ steps.prepare.outputs.docker_image }}
-            docker stop email-ai-analyzer || true
-            docker rm email-ai-analyzer || true
-            docker run -d --restart always -p 8080:8080 --name email-ai-analyzer ${{ steps.prepare.outputs.docker_image }}
+            echo "Deploying latest version..."
+            docker pull ${{ steps.prepare.outputs.deploy_image }}
+            docker stop ${{ env.IMAGE_NAME }} || true
+            docker rm ${{ env.IMAGE_NAME }} || true
+            docker run -d --restart always \
+              -p 8080:8080 \
+              --name ${{ env.IMAGE_NAME }} \
+              ${{ steps.prepare.outputs.deploy_image }}
+
+      # Optional: if you want to deploy a specific version when tagging a release
+      - name: Notify or deploy tagged release (manual step reminder)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          echo "New release tagged: ${{ github.ref_name }}"
+          echo "Image is available as:"
+          echo "  ${DOCKER_REPO}/${IMAGE_NAME}:${{ github.ref_name }}"
+          echo "  ${DOCKER_REPO}/${IMAGE_NAME}:latest (also updated)"
+          # You can add another SSH deployment here if you want auto-deploy on tag
