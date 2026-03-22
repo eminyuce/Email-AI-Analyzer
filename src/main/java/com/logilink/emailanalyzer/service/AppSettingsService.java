@@ -18,6 +18,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Properties;
 
 @Service
@@ -125,8 +127,12 @@ public class AppSettingsService {
     }
 
     public boolean testSmtpConnection(String host, Integer port, String user, String password, Boolean sslEnabled) {
+        return testSmtpConnectionDetailed(host, port, user, password, sslEnabled).isSuccess();
+    }
+
+    public TestEndpointResult testSmtpConnectionDetailed(String host, Integer port, String user, String password, Boolean sslEnabled) {
         if (isBlank(host) || port == null || isBlank(user) || isBlank(password)) {
-            return false;
+            return TestEndpointResult.failure("Missing SMTP settings. host, port, username and password are required.");
         }
 
         String smtpHost = host.startsWith("imap.") ? "smtp." + host.substring("imap.".length()) : host;
@@ -149,17 +155,24 @@ public class AppSettingsService {
             Session session = Session.getInstance(properties);
             try (Transport transport = session.getTransport("smtp")) {
                 transport.connect(smtpHost, smtpPort, user, password);
-                return true;
+                return TestEndpointResult.success(
+                        "SMTP connection successful.",
+                        Map.of("smtpHost", smtpHost, "smtpPort", smtpPort)
+                );
             }
         } catch (Exception e) {
             log.error("SMTP connection test failed: {}", e.getMessage());
-            return false;
+            return TestEndpointResult.failure("SMTP connection failed: " + e.getMessage());
         }
     }
 
     public boolean testAiChatConnection(String llmUrl, String llmModel, Double llmTemperature) {
+        return testAiChatConnectionDetailed(llmUrl, llmModel, llmTemperature).isSuccess();
+    }
+
+    public TestEndpointResult testAiChatConnectionDetailed(String llmUrl, String llmModel, Double llmTemperature) {
         if (isBlank(llmUrl) || isBlank(llmModel)) {
-            return false;
+            return TestEndpointResult.failure("Missing AI settings. llmUrl and llmModel are required.");
         }
 
         String baseUrl = llmUrl.endsWith("/") ? llmUrl.substring(0, llmUrl.length() - 1) : llmUrl;
@@ -182,13 +195,22 @@ public class AppSettingsService {
                     .build();
 
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            return response.statusCode() >= 200
-                    && response.statusCode() < 300
-                    && response.body() != null
-                    && response.body().contains("\"response\"");
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                return TestEndpointResult.failure("AI chat test failed with HTTP status " + response.statusCode() + ".");
+            }
+            if (response.body() == null || response.body().isBlank()) {
+                return TestEndpointResult.failure("AI chat test failed: empty response body.");
+            }
+            if (!response.body().contains("\"response\"")) {
+                return TestEndpointResult.failure("AI chat test failed: response does not contain expected 'response' field.");
+            }
+            return TestEndpointResult.success(
+                    "AI chat test successful.",
+                    Map.of("statusCode", response.statusCode(), "model", llmModel)
+            );
         } catch (Exception e) {
             log.error("AI chat connection test failed: {}", e.getMessage());
-            return false;
+            return TestEndpointResult.failure("AI chat test failed: " + e.getMessage());
         }
     }
 
@@ -285,6 +307,42 @@ public class AppSettingsService {
 
     private static boolean same(Object left, Object right) {
         return left == null ? right == null : left.equals(right);
+    }
+
+    public static final class TestEndpointResult {
+        private final boolean success;
+        private final String message;
+        private final Map<String, Object> details;
+
+        private TestEndpointResult(boolean success, String message, Map<String, Object> details) {
+            this.success = success;
+            this.message = message;
+            this.details = details == null ? Map.of() : Map.copyOf(details);
+        }
+
+        public static TestEndpointResult success(String message, Map<String, Object> details) {
+            return new TestEndpointResult(true, message, details);
+        }
+
+        public static TestEndpointResult failure(String message) {
+            return new TestEndpointResult(false, message, Map.of());
+        }
+
+        public boolean isSuccess() {
+            return success;
+        }
+
+        public String getMessage() {
+            return message;
+        }
+
+        public Map<String, Object> toResponseBody() {
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("success", success);
+            response.put("message", message);
+            response.putAll(details);
+            return response;
+        }
     }
 
 }

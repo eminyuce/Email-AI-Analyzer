@@ -46,6 +46,10 @@ public class EmailService {
     }
 
     public List<Message> fetchUnreadEmailsByRange(int maxEmails, Date startDate, Date endDate) {
+        return fetchEmailsByRange(maxEmails, startDate, endDate, true);
+    }
+
+    public List<Message> fetchEmailsByRange(int maxEmails, Date startDate, Date endDate, boolean unreadOnly) {
         if (maxEmails <= 0) {
             return List.of();
         }
@@ -61,21 +65,29 @@ public class EmailService {
         properties.put("mail.imaps.port", String.valueOf(settings.getMailPort()));
         properties.put("mail.imaps.ssl.enable", String.valueOf(settings.getMailSslEnabled()));
 
+        Store store = null;
+        Folder emailFolder = null;
         try {
             Session emailSession = Session.getDefaultInstance(properties);
-            Store store = emailSession.getStore("imaps");
+            store = emailSession.getStore("imaps");
             store.connect(settings.getMailHost(), settings.getMailUsername(), settings.getMailPassword());
 
-            Folder emailFolder = store.getFolder("INBOX");
+            emailFolder = store.getFolder("INBOX");
             emailFolder.open(Folder.READ_ONLY);
             SearchTerm dateRange = new AndTerm(
                     new ReceivedDateTerm(ComparisonTerm.GE, startDate),
                     new ReceivedDateTerm(ComparisonTerm.LE, endDate)
             );
-            SearchTerm unreadOnly = new FlagTerm(new Flags(Flags.Flag.SEEN), false);
-            SearchTerm combinedTerm = new AndTerm(dateRange, unreadOnly);
+            SearchTerm combinedTerm = dateRange;
+            if (unreadOnly) {
+                SearchTerm unreadTerm = new FlagTerm(new Flags(Flags.Flag.SEEN), false);
+                combinedTerm = new AndTerm(dateRange, unreadTerm);
+            }
             Message[] foundMessages = emailFolder.search(combinedTerm);
-            log.info("Found {} total unread messages in date range. Limiting to {}", foundMessages.length, maxEmails);
+            log.info("Found {} total {} messages in date range. Limiting to {}",
+                    foundMessages.length,
+                    unreadOnly ? "unread" : "matching",
+                    maxEmails);
 
             int count = 0;
             for (int i = foundMessages.length - 1; i >= 0 && count < maxEmails; i--) {
@@ -93,6 +105,21 @@ public class EmailService {
         } catch (Exception e) {
             log.error("Error fetching emails: {}", e.getMessage());
             throw new EmailAnalysisException("Failed to fetch emails within range", e);
+        } finally {
+            if (emailFolder != null && emailFolder.isOpen()) {
+                try {
+                    emailFolder.close(false);
+                } catch (MessagingException e) {
+                    log.warn("Failed to close email folder cleanly: {}", e.getMessage());
+                }
+            }
+            if (store != null && store.isConnected()) {
+                try {
+                    store.close();
+                } catch (MessagingException e) {
+                    log.warn("Failed to close email store cleanly: {}", e.getMessage());
+                }
+            }
         }
         return unreadMessages;
     }

@@ -25,16 +25,7 @@ public class AIService {
     public EmailAnalysisResult analyzeEmail(String emailId, String subject, String sender, String content) {
         try {
             AppSettings settings = appSettingsService.getOrCreate();
-            String systemPrompt = settings.getSystemPrompt();
-
-            // Dynamic Model Configuration using ChatOptions override
-            OllamaOptions options = OllamaOptions.create()
-                    .withModel(settings.getLlmModel())
-                    .withTemperature(settings.getLlmTemperature().floatValue());
-
-            ChatClient chatClient = chatClientBuilder
-                    .defaultOptions(options)
-                    .build();
+            ChatClient chatClient = buildChatClient(settings);
 
             String userPrompt = String.format("""
                     Email ID: %s
@@ -45,7 +36,7 @@ public class AIService {
                     """, emailId, subject, sender, content);
 
             return chatClient.prompt()
-                    .system(systemPrompt)
+                    .system(settings.getSystemPrompt())
                     .user(userPrompt)
                     .call()
                     .entity(EmailAnalysisResult.class);
@@ -53,5 +44,44 @@ public class AIService {
             log.error("Error during AI analysis for email {}: {}", emailId, e.getMessage());
             throw new EmailAnalysisException("AI Analysis failed", e);
         }
+    }
+
+    public String testModelResponse(String prompt) {
+        String effectivePrompt = (prompt == null || prompt.isBlank())
+                ? "Reply with exactly: OLLAMA_TEST_OK"
+                : prompt;
+
+        try {
+            AppSettings settings = appSettingsService.getOrCreate();
+            ChatClient chatClient = buildChatClient(settings);
+
+            String response = chatClient.prompt()
+                    .system("You are an AI health-check assistant. Follow the user's instruction exactly.")
+                    .user(effectivePrompt)
+                    .call()
+                    .content();
+
+            if (response == null) {
+                throw new EmailAnalysisException("AI service returned an empty response body.");
+            }
+            return response.trim();
+        } catch (Exception e) {
+            log.error("AI model test request failed: {}", e.getMessage());
+            throw new EmailAnalysisException("AI model test failed", e);
+        }
+    }
+
+    private ChatClient buildChatClient(AppSettings settings) {
+        Float temperature = settings.getLlmTemperature() == null
+                ? 0.3f
+                : settings.getLlmTemperature().floatValue();
+
+        OllamaOptions options = OllamaOptions.create()
+                .withModel(settings.getLlmModel())
+                .withTemperature(temperature);
+
+        return chatClientBuilder
+                .defaultOptions(options)
+                .build();
     }
 }

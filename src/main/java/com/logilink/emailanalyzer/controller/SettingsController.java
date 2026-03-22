@@ -8,8 +8,12 @@ import com.logilink.emailanalyzer.model.EmailAnalysisReportDto;
 import com.logilink.emailanalyzer.model.SettingsSaveResponse;
 import com.logilink.emailanalyzer.model.SettingsForm;
 import com.logilink.emailanalyzer.scheduler.EmailScheduler;
+import com.logilink.emailanalyzer.service.AIService;
 import com.logilink.emailanalyzer.service.AnalysisService;
 import com.logilink.emailanalyzer.service.AppSettingsService;
+import com.logilink.emailanalyzer.service.EmailService;
+import jakarta.mail.Message;
+import jakarta.mail.MessagingException;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -46,15 +50,21 @@ public class SettingsController {
     private final AppSettingsService appSettingsService;
     private final EmailScheduler emailScheduler;
     private final AnalysisService analysisService;
+    private final EmailService emailService;
+    private final AIService aiService;
 
     public SettingsController(
             AppSettingsService appSettingsService,
             EmailScheduler emailScheduler,
-            AnalysisService analysisService
+            AnalysisService analysisService,
+            EmailService emailService,
+            AIService aiService
     ) {
         this.appSettingsService = appSettingsService;
         this.emailScheduler = emailScheduler;
         this.analysisService = analysisService;
+        this.emailService = emailService;
+        this.aiService = aiService;
     }
 
     @GetMapping
@@ -90,7 +100,11 @@ public class SettingsController {
         return "redirect:/settings";
     }
 
-    @PostMapping(path = "/api/save", consumes = "application/json", produces = "application/json")
+    /**
+     * Persists test settings used by core-test endpoints and scheduler execution.
+     * This endpoint allows API clients to configure mail + LLM settings without using the UI form.
+     */
+    @PostMapping(path = "/api/core-test/settings", consumes = "application/json", produces = "application/json")
     @ResponseBody
     public ResponseEntity<SettingsSaveResponse> saveSettingsApi(
             @Valid @RequestBody SettingsForm settingsForm,
@@ -111,7 +125,11 @@ public class SettingsController {
         response.setSchedulerRunning(emailScheduler.isRunning());
         return ResponseEntity.ok(response);
     }
-    @GetMapping(path = "/api/save-default", produces = "application/json")
+    /**
+     * Runs the end-to-end core flow with default host/user values and a caller-provided
+     * model/password/date range. Intended for integration verification of fetch + AI analysis together.
+     */
+    @GetMapping(path = "/api/core-test/run", produces = "application/json")
     @ResponseBody
     public ResponseEntity<DefaultSettingsTestResponse> saveDefaultSettingsApi(
             @RequestParam("modelName") String modelName,
@@ -193,36 +211,120 @@ public class SettingsController {
 
     @PostMapping("/test-smtp")
     @ResponseBody
-    public Map<String, Object> testSmtp(@ModelAttribute SettingsForm form) {
-        boolean success = appSettingsService.testSmtpConnection(
+    public ResponseEntity<Map<String, Object>> testSmtp(@ModelAttribute SettingsForm form) {
+        AppSettingsService.TestEndpointResult result = appSettingsService.testSmtpConnectionDetailed(
                 form.getMailHost(),
                 form.getMailPort(),
                 form.getMailUsername(),
                 form.getMailPassword(),
                 form.getMailSslEnabled()
         );
-        return Map.of(
-                "success", success,
-                "message", success
-                        ? "SMTP connection successful."
-                        : "SMTP connection failed. Check mail host/port/username/password."
-        );
+        HttpStatus status = result.isSuccess() ? HttpStatus.OK : HttpStatus.BAD_REQUEST;
+        return ResponseEntity.status(status).body(result.toResponseBody());
     }
 
     @PostMapping("/test-ai")
     @ResponseBody
-    public Map<String, Object> testAi(@ModelAttribute SettingsForm form) {
-        boolean success = appSettingsService.testAiChatConnection(
+    public ResponseEntity<Map<String, Object>> testAi(@ModelAttribute SettingsForm form) {
+        AppSettingsService.TestEndpointResult result = appSettingsService.testAiChatConnectionDetailed(
                 form.getLlmUrl(),
                 form.getLlmModel(),
                 form.getLlmTemperature()
         );
-        return Map.of(
-                "success", success,
-                "message", success
-                        ? "AI chat test successful."
-                        : "AI chat test failed. Check LLM URL/model and ensure Ollama is running."
-        );
+        HttpStatus status = result.isSuccess() ? HttpStatus.OK : HttpStatus.BAD_REQUEST;
+        return ResponseEntity.status(status).body(result.toResponseBody());
+    }
+
+    /**
+     * Validates only the Ollama model response path used by analysis jobs.
+     * It does not fetch emails or run scheduler logic; purpose is isolated LLM service health-check.
+     */
+    @GetMapping(path = "/api/core-test/ai-health", produces = "application/json")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> testAiHealth(
+            @RequestParam(value = "prompt", required = false) String prompt
+    ) {
+        String expectedToken = "OLLAMA_TEST_OK";
+        long startedAt = System.currentTimeMillis();
+        try {
+            String response = aiService.testModelResponse(prompt);
+            long durationMs = System.currentTimeMillis() - startedAt;
+            boolean tokenMatched = response.contains(expectedToken);
+
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("success", true);
+            body.put("message", "Ollama model responded to health-check request.");
+            body.put("expectedToken", expectedToken);
+            body.put("containsExpectedToken", tokenMatched);
+            body.put("durationMs", durationMs);
+            body.put("response", response);
+            return ResponseEntity.ok(body);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "success", false,
+                    "message", "AI health-check failed: " + e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Verifies mailbox fetch behavior only and returns lightweight message metadata (subject/from/date).
+     * Use this endpoint to debug IMAP access independently from AI analysis and scheduler processing.
+     */
+    @GetMapping(path = "/api/core-test/fetch-subjects", produces = "application/json")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> fetchEmailSubjects(
+            @RequestParam(value = "maxEmails", required = false) Integer maxEmails,
+            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
+            @RequestParam(value = "unreadOnly", defaultValue = "false") boolean unreadOnly
+    ) {
+        try {
+            int effectiveMaxEmails = maxEmails != null && maxEmails > 0
+                    ? maxEmails
+                    : appSettingsService.getSchedulerMaxEmailsOrDefault();
+            LocalDateTime effectiveEndDate = endDate != null ? endDate : LocalDateTime.now();
+            LocalDateTime effectiveStartDate = startDate != null
+                    ? startDate
+                    : effectiveEndDate.minusDays(appSettingsService.getSchedulerDateRangeDaysOrDefault());
+
+            if (effectiveStartDate.isAfter(effectiveEndDate)) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "success", false,
+                        "message", "startDate must be before endDate."
+                ));
+            }
+
+            Date rangeStart = Date.from(effectiveStartDate.atZone(ZoneId.systemDefault()).toInstant());
+            Date rangeEnd = Date.from(effectiveEndDate.atZone(ZoneId.systemDefault()).toInstant());
+            List<Message> messages = emailService.fetchEmailsByRange(effectiveMaxEmails, rangeStart, rangeEnd, unreadOnly);
+
+            List<Map<String, Object>> subjects = new ArrayList<>();
+            for (Message message : messages) {
+                subjects.add(Map.of(
+                        "subject", safeSubject(message),
+                        "receivedAt", message.getReceivedDate() != null ? message.getReceivedDate().toInstant().toString() : "",
+                        "from", safeFrom(message)
+                ));
+            }
+
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("success", true);
+            response.put("message", "Email fetch test completed.");
+            response.put("mailboxHost", appSettingsService.getRequiredMailSettings().getMailHost());
+            response.put("unreadOnly", unreadOnly);
+            response.put("requestedMaxEmails", effectiveMaxEmails);
+            response.put("fetchedCount", subjects.size());
+            response.put("startDate", effectiveStartDate.toString());
+            response.put("endDate", effectiveEndDate.toString());
+            response.put("subjects", subjects);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "success", false,
+                    "message", "Email fetch test failed: " + e.getMessage()
+            ));
+        }
     }
 
     @PostMapping("/scheduler/start")
@@ -271,6 +373,27 @@ public class SettingsController {
             result.add(new ApiValidationError(entry.getKey(), entry.getValue()));
         }
         return result;
+    }
+
+    private String safeSubject(Message message) {
+        try {
+            String subject = message.getSubject();
+            return subject == null || subject.isBlank() ? "(no subject)" : subject;
+        } catch (MessagingException e) {
+            return "(subject unavailable)";
+        }
+    }
+
+    private String safeFrom(Message message) {
+        try {
+            var from = message.getFrom();
+            if (from == null || from.length == 0 || from[0] == null) {
+                return "";
+            }
+            return from[0].toString();
+        } catch (MessagingException e) {
+            return "";
+        }
     }
 
     private String loadDefaultSystemPrompt() {
