@@ -1,13 +1,20 @@
 package com.logilink.emailanalyzer.controller;
 
 import com.logilink.emailanalyzer.domain.AppSettings;
+import com.logilink.emailanalyzer.domain.EmailAnalysis;
+import com.logilink.emailanalyzer.model.ApiValidationError;
+import com.logilink.emailanalyzer.model.DefaultSettingsTestResponse;
+import com.logilink.emailanalyzer.model.EmailAnalysisReportDto;
+import com.logilink.emailanalyzer.model.SettingsSaveResponse;
 import com.logilink.emailanalyzer.model.SettingsForm;
 import com.logilink.emailanalyzer.scheduler.EmailScheduler;
+import com.logilink.emailanalyzer.service.AnalysisService;
 import com.logilink.emailanalyzer.service.AppSettingsService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -16,7 +23,12 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @Controller
@@ -33,16 +45,29 @@ public class SettingsController {
 
     private final AppSettingsService appSettingsService;
     private final EmailScheduler emailScheduler;
+    private final AnalysisService analysisService;
 
-    public SettingsController(AppSettingsService appSettingsService, EmailScheduler emailScheduler) {
+    public SettingsController(
+            AppSettingsService appSettingsService,
+            EmailScheduler emailScheduler,
+            AnalysisService analysisService
+    ) {
         this.appSettingsService = appSettingsService;
         this.emailScheduler = emailScheduler;
+        this.analysisService = analysisService;
     }
 
     @GetMapping
     public String settings(Model model) {
         if (!model.containsAttribute("settingsForm")) {
-            model.addAttribute("settingsForm", SettingsForm.from(appSettingsService.getOrCreate()));
+            SettingsForm form = SettingsForm.from(appSettingsService.getOrCreate());
+            if (form.getSchedulerDateRangeDays() == null) {
+                form.setSchedulerDateRangeDays(appSettingsService.getSchedulerDateRangeDaysOrDefault());
+            }
+            if (form.getSchedulerMaxEmails() == null) {
+                form.setSchedulerMaxEmails(appSettingsService.getSchedulerMaxEmailsOrDefault());
+            }
+            model.addAttribute("settingsForm", form);
         }
         model.addAttribute("schedulerRunning", emailScheduler.isRunning());
         return "settings/form";
@@ -67,37 +92,52 @@ public class SettingsController {
 
     @PostMapping(path = "/api/save", consumes = "application/json", produces = "application/json")
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> saveSettingsApi(
+    public ResponseEntity<SettingsSaveResponse> saveSettingsApi(
             @Valid @RequestBody SettingsForm settingsForm,
             BindingResult bindingResult
     ) {
+        SettingsSaveResponse response = new SettingsSaveResponse();
         if (bindingResult.hasErrors()) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "message", "Validation failed for SettingsForm.",
-                    "errors", validationErrors(bindingResult)
-            ));
+            response.setSuccess(false);
+            response.setMessage("Validation failed for SettingsForm.");
+            response.setErrors(validationErrors(bindingResult));
+            response.setSchedulerRunning(emailScheduler.isRunning());
+            return ResponseEntity.badRequest().body(response);
         }
 
         applySettings(settingsForm);
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "message", "Settings saved successfully.",
-                "schedulerRunning", emailScheduler.isRunning()
-        ));
+        response.setSuccess(true);
+        response.setMessage("Settings saved successfully.");
+        response.setSchedulerRunning(emailScheduler.isRunning());
+        return ResponseEntity.ok(response);
     }
-
     @GetMapping(path = "/api/save-default", produces = "application/json")
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> saveDefaultSettingsApi(
+    public ResponseEntity<DefaultSettingsTestResponse> saveDefaultSettingsApi(
             @RequestParam("modelName") String modelName,
-            @RequestParam("mailPassword") String mailPassword
+            @RequestParam("mailPassword") String mailPassword,
+            @RequestParam("emailCount") Integer emailCount,
+            @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate
     ) {
+        DefaultSettingsTestResponse response = new DefaultSettingsTestResponse();
         if (modelName == null || modelName.isBlank() || mailPassword == null || mailPassword.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "message", "Both modelName and mailPassword are required."
-            ));
+            response.setSuccess(false);
+            response.setMessage("Both modelName and mailPassword are required.");
+            response.setSchedulerCronChanged(false);
+            return ResponseEntity.badRequest().body(response);
+        }
+        if (emailCount == null || emailCount <= 0) {
+            response.setSuccess(false);
+            response.setMessage("emailCount must be greater than 0.");
+            response.setSchedulerCronChanged(false);
+            return ResponseEntity.badRequest().body(response);
+        }
+        if (startDate == null || endDate == null || startDate.isAfter(endDate)) {
+            response.setSuccess(false);
+            response.setMessage("Valid startDate and endDate are required, and startDate must be before endDate.");
+            response.setSchedulerCronChanged(false);
+            return ResponseEntity.badRequest().body(response);
         }
 
         SettingsForm settingsForm = new SettingsForm();
@@ -113,16 +153,42 @@ public class SettingsController {
         AppSettings currentSettings = appSettingsService.getOrCreate();
         settingsForm.setSchedulerEnabled(currentSettings.getSchedulerEnabled());
         settingsForm.setSchedulerCron(appSettingsService.getSchedulerCronOrDefault());
+        settingsForm.setSchedulerDateRangeDays(appSettingsService.getSchedulerDateRangeDaysOrDefault());
+        settingsForm.setSchedulerMaxEmails(appSettingsService.getSchedulerMaxEmailsOrDefault());
 
-        applySettings(settingsForm);
-        return ResponseEntity.status(HttpStatus.OK).body(Map.of(
-                "success", true,
-                "message", "Default settings saved successfully.",
-                "schedulerRunning", emailScheduler.isRunning(),
-                "mailUsername", DEFAULT_MAIL_USERNAME,
-                "llmModel", modelName,
-                "schedulerCronChanged", false
-        ));
+        try {
+            applySettings(settingsForm);
+            Date rangeStart = Date.from(startDate.atZone(ZoneId.systemDefault()).toInstant());
+            Date rangeEnd = Date.from(endDate.atZone(ZoneId.systemDefault()).toInstant());
+            List<EmailAnalysis> analyzedEmails = analysisService.processEmails(emailCount, rangeStart, rangeEnd);
+            List<EmailAnalysisReportDto> reports = new ArrayList<>();
+            for (EmailAnalysis analyzedEmail : analyzedEmails) {
+                reports.add(EmailAnalysisReportDto.from(analyzedEmail));
+            }
+
+            response.setSuccess(true);
+            response.setMessage("Default settings saved and core email AI flow executed.");
+            response.setSchedulerRunning(emailScheduler.isRunning());
+            response.setMailUsername(DEFAULT_MAIL_USERNAME);
+            response.setLlmModel(modelName);
+            response.setSchedulerCronChanged(false);
+            response.setRequestedEmailCount(emailCount);
+            response.setAnalyzedEmailCount(reports.size());
+            response.setRangeStart(startDate);
+            response.setRangeEnd(endDate);
+            response.setAnalyzedEmailReports(reports);
+            return ResponseEntity.status(HttpStatus.OK).body(response);
+        } catch (Exception e) {
+            response.setSuccess(false);
+            response.setMessage("Core email AI flow failed: " + e.getMessage());
+            response.setSchedulerCronChanged(false);
+            response.setRequestedEmailCount(emailCount);
+            response.setAnalyzedEmailCount(0);
+            response.setRangeStart(startDate);
+            response.setRangeEnd(endDate);
+            response.setAnalyzedEmailReports(new ArrayList<>());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
     }
 
     @PostMapping("/test-smtp")
@@ -195,11 +261,16 @@ public class SettingsController {
         }
     }
 
-    private Map<String, String> validationErrors(BindingResult bindingResult) {
+    private List<ApiValidationError> validationErrors(BindingResult bindingResult) {
         Map<String, String> errors = new LinkedHashMap<>();
         bindingResult.getFieldErrors()
                 .forEach(fieldError -> errors.put(fieldError.getField(), fieldError.getDefaultMessage()));
-        return errors;
+
+        List<ApiValidationError> result = new ArrayList<>();
+        for (Map.Entry<String, String> entry : errors.entrySet()) {
+            result.add(new ApiValidationError(entry.getKey(), entry.getValue()));
+        }
+        return result;
     }
 
     private String loadDefaultSystemPrompt() {

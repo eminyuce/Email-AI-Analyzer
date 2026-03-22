@@ -11,6 +11,9 @@ import org.springframework.scheduling.support.CronExpression;
 import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Date;
 import java.util.concurrent.ScheduledFuture;
 
 @Component
@@ -91,7 +94,12 @@ public class EmailScheduler {
     private void runScheduledJob() {
         log.info("Starting scheduled email analysis job...");
         try {
-            analysisService.processEmails();
+            int maxEmails = appSettingsService.getSchedulerMaxEmailsOrDefault();
+            int dateRangeDays = appSettingsService.getSchedulerDateRangeDaysOrDefault();
+
+            Date endDate = Date.from(Instant.now());
+            Date startDate = Date.from(Instant.now().minus(dateRangeDays, ChronoUnit.DAYS));
+            analysisService.processEmails(maxEmails, startDate, endDate);
         } catch (Exception e) {
             log.error("Error in scheduled email analysis: {}", e.getMessage());
         }

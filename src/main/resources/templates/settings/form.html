@@ -127,7 +127,7 @@
                 </div>
                 <div class="card-body">
                     <div class="row g-3 align-items-end">
-                        <div class="col-md-7">
+                        <div class="col-md-4">
                             <label for="schedulerCron" class="form-label">Cron Expression</label>
                             <input id="schedulerCron" type="text" class="form-control" th:field="*{schedulerCron}"
                                    placeholder="0 */5 * * * *">
@@ -144,7 +144,21 @@
                                 <option th:value="false">Disabled</option>
                             </select>
                         </div>
-                        <div class="col-md-3 d-flex gap-2">
+                        <div class="col-md-2">
+                            <label for="schedulerDateRangeDays" class="form-label">Date Range (Days)</label>
+                            <input id="schedulerDateRangeDays" type="number" min="1" class="form-control"
+                                   th:field="*{schedulerDateRangeDays}" placeholder="1">
+                            <div class="text-danger small mt-1" th:if="${#fields.hasErrors('schedulerDateRangeDays')}"
+                                 th:errors="*{schedulerDateRangeDays}"></div>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="schedulerMaxEmails" class="form-label">Max Emails</label>
+                            <input id="schedulerMaxEmails" type="number" min="1" class="form-control"
+                                   th:field="*{schedulerMaxEmails}" placeholder="1000">
+                            <div class="text-danger small mt-1" th:if="${#fields.hasErrors('schedulerMaxEmails')}"
+                                 th:errors="*{schedulerMaxEmails}"></div>
+                        </div>
+                        <div class="col-md-2 d-flex gap-2">
                             <button type="button" id="btn-start-scheduler" class="btn btn-success w-100">
                                 <span id="start-scheduler-spinner" class="spinner-border spinner-border-sm d-none"
                                       role="status"></span>

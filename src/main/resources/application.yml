@@ -29,6 +29,8 @@ spring:
 email:
   analysis:
     cron: "0 */5 * * * *"
+    default-date-range-days: 1
+    default-max-emails: 1000
 
 logging:
   level:

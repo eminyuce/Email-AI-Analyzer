@@ -42,6 +42,12 @@ public class SettingsForm {
     @Pattern(regexp = "^\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+$", message = "Cron must have 6 fields")
     private String schedulerCron;
 
+    @Min(value = 1, message = "Date range days must be at least 1")
+    private Integer schedulerDateRangeDays;
+
+    @Min(value = 1, message = "Max emails must be at least 1")
+    private Integer schedulerMaxEmails;
+
     public SettingsForm() {
     }
 
@@ -59,6 +65,8 @@ public class SettingsForm {
         form.setLlmTemperature(settings.getLlmTemperature());
         form.setSchedulerEnabled(settings.getSchedulerEnabled());
         form.setSchedulerCron(settings.getSchedulerCron());
+        form.setSchedulerDateRangeDays(settings.getSchedulerDateRangeDays());
+        form.setSchedulerMaxEmails(settings.getSchedulerMaxEmails());
 
         return form;
     }
@@ -150,5 +158,21 @@ public class SettingsForm {
 
     public void setSchedulerCron(String schedulerCron) {
         this.schedulerCron = schedulerCron;
+    }
+
+    public Integer getSchedulerDateRangeDays() {
+        return schedulerDateRangeDays;
+    }
+
+    public void setSchedulerDateRangeDays(Integer schedulerDateRangeDays) {
+        this.schedulerDateRangeDays = schedulerDateRangeDays;
+    }
+
+    public Integer getSchedulerMaxEmails() {
+        return schedulerMaxEmails;
+    }
+
+    public void setSchedulerMaxEmails(Integer schedulerMaxEmails) {
+        this.schedulerMaxEmails = schedulerMaxEmails;
     }
 }

@@ -8,6 +8,7 @@ import jakarta.mail.Session;
 import jakarta.mail.Transport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,9 +25,20 @@ public class AppSettingsService {
 
     private static final Logger log = LoggerFactory.getLogger(AppSettingsService.class);
     private final AppSettingsRepository repository;
+    private final String defaultSchedulerCron;
+    private final int defaultSchedulerDateRangeDays;
+    private final int defaultSchedulerMaxEmails;
 
-    public AppSettingsService(AppSettingsRepository repository) {
+    public AppSettingsService(
+            AppSettingsRepository repository,
+            @Value("${email.analysis.cron:0 */5 * * * *}") String defaultSchedulerCron,
+            @Value("${email.analysis.default-date-range-days:1}") int defaultSchedulerDateRangeDays,
+            @Value("${email.analysis.default-max-emails:1000}") int defaultSchedulerMaxEmails
+    ) {
         this.repository = repository;
+        this.defaultSchedulerCron = defaultSchedulerCron;
+        this.defaultSchedulerDateRangeDays = defaultSchedulerDateRangeDays;
+        this.defaultSchedulerMaxEmails = defaultSchedulerMaxEmails;
     }
 
     @Transactional
@@ -38,20 +50,54 @@ public class AppSettingsService {
     @Transactional
     public AppSettings save(SettingsForm form) {
         AppSettings settings = getOrCreate();
-        settings.setMailHost(trim(form.getMailHost()));
-        settings.setMailPort(form.getMailPort());
-        settings.setMailUsername(trim(form.getMailUsername()));
-        settings.setMailPassword(form.getMailPassword());
-        settings.setMailSslEnabled(form.getMailSslEnabled());
-        settings.setSystemPrompt(trim(form.getSystemPrompt()));
+        String mailHost = trim(form.getMailHost());
+        Integer mailPort = form.getMailPort();
+        String mailUsername = trim(form.getMailUsername());
+        String mailPassword = form.getMailPassword();
+        Boolean mailSslEnabled = form.getMailSslEnabled();
+        String systemPrompt = trim(form.getSystemPrompt());
+        String llmModel = trim(form.getLlmModel());
+        String llmUrl = trim(form.getLlmUrl());
+        Double llmTemperature = form.getLlmTemperature();
+        Boolean schedulerEnabled = form.getSchedulerEnabled();
+        String schedulerCron = trim(form.getSchedulerCron());
+        Integer schedulerDateRangeDays = form.getSchedulerDateRangeDays();
+        Integer schedulerMaxEmails = form.getSchedulerMaxEmails();
 
-        settings.setLlmModel(trim(form.getLlmModel()));
-        settings.setLlmUrl(trim(form.getLlmUrl()));
-        settings.setLlmTemperature(form.getLlmTemperature());
-        settings.setSchedulerEnabled(form.getSchedulerEnabled());
-        settings.setSchedulerCron(trim(form.getSchedulerCron()));
+        validateCron(schedulerCron);
+        validatePositive("Date range days", schedulerDateRangeDays);
+        validatePositive("Max emails", schedulerMaxEmails);
 
-        validateCron(settings.getSchedulerCron());
+        if (same(settings.getMailHost(), mailHost)
+                && same(settings.getMailPort(), mailPort)
+                && same(settings.getMailUsername(), mailUsername)
+                && same(settings.getMailPassword(), mailPassword)
+                && same(settings.getMailSslEnabled(), mailSslEnabled)
+                && same(settings.getSystemPrompt(), systemPrompt)
+                && same(settings.getLlmModel(), llmModel)
+                && same(settings.getLlmUrl(), llmUrl)
+                && same(settings.getLlmTemperature(), llmTemperature)
+                && same(settings.getSchedulerEnabled(), schedulerEnabled)
+                && same(settings.getSchedulerCron(), schedulerCron)
+                && same(settings.getSchedulerDateRangeDays(), schedulerDateRangeDays)
+                && same(settings.getSchedulerMaxEmails(), schedulerMaxEmails)) {
+            return settings;
+        }
+
+        settings.setMailHost(mailHost);
+        settings.setMailPort(mailPort);
+        settings.setMailUsername(mailUsername);
+        settings.setMailPassword(mailPassword);
+        settings.setMailSslEnabled(mailSslEnabled);
+        settings.setSystemPrompt(systemPrompt);
+
+        settings.setLlmModel(llmModel);
+        settings.setLlmUrl(llmUrl);
+        settings.setLlmTemperature(llmTemperature);
+        settings.setSchedulerEnabled(schedulerEnabled);
+        settings.setSchedulerCron(schedulerCron);
+        settings.setSchedulerDateRangeDays(schedulerDateRangeDays);
+        settings.setSchedulerMaxEmails(schedulerMaxEmails);
 
         return repository.save(settings);
     }
@@ -165,7 +211,19 @@ public class AppSettingsService {
     @Transactional(readOnly = true)
     public String getSchedulerCronOrDefault() {
         String cron = getOrCreate().getSchedulerCron();
-        return isBlank(cron) ? "0 */5 * * * *" : cron;
+        return isBlank(cron) ? defaultSchedulerCron : cron;
+    }
+
+    @Transactional(readOnly = true)
+    public int getSchedulerDateRangeDaysOrDefault() {
+        Integer dateRangeDays = getOrCreate().getSchedulerDateRangeDays();
+        return dateRangeDays == null || dateRangeDays <= 0 ? defaultSchedulerDateRangeDays : dateRangeDays;
+    }
+
+    @Transactional(readOnly = true)
+    public int getSchedulerMaxEmailsOrDefault() {
+        Integer maxEmails = getOrCreate().getSchedulerMaxEmails();
+        return maxEmails == null || maxEmails <= 0 ? defaultSchedulerMaxEmails : maxEmails;
     }
 
     private AppSettings createDefault() {
@@ -181,7 +239,9 @@ public class AppSettingsService {
                 .llmUrl("http://localhost:11434")
                 .llmTemperature(0.3)
                 .schedulerEnabled(Boolean.FALSE)
-                .schedulerCron("0 */5 * * * *")
+                .schedulerCron(defaultSchedulerCron)
+                .schedulerDateRangeDays(defaultSchedulerDateRangeDays)
+                .schedulerMaxEmails(defaultSchedulerMaxEmails)
                 .build();
         return repository.save(defaults);
     }
@@ -215,6 +275,16 @@ public class AppSettingsService {
         } catch (Exception ex) {
             throw new EmailAnalysisException("Invalid cron expression. Use 6-field Spring cron format.", ex);
         }
+    }
+
+    private static void validatePositive(String fieldName, Integer value) {
+        if (value != null && value <= 0) {
+            throw new EmailAnalysisException(fieldName + " must be greater than 0.");
+        }
+    }
+
+    private static boolean same(Object left, Object right) {
+        return left == null ? right == null : left.equals(right);
     }
 
 }

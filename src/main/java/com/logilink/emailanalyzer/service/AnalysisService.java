@@ -10,9 +10,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Date;
 import java.util.List;
 
 @Service
@@ -31,9 +33,32 @@ public class AnalysisService {
     }
 
     @Transactional
-    public void processEmails() {
-        List<Message> messages = emailService.fetchUnreadEmails();
+    public List<EmailAnalysis> processEmails() {
+        return processEmails(Integer.MAX_VALUE);
+    }
+
+    @Transactional
+    public List<EmailAnalysis> processEmails(int maxEmails) {
+        if (maxEmails <= 0) {
+            return List.of();
+        }
+
+        List<Message> messages = emailService.fetchUnreadEmails(maxEmails);
+        return processMessages(messages);
+    }
+
+    @Transactional
+    public List<EmailAnalysis> processEmails(int maxEmails, Date startDate, Date endDate) {
+        if (maxEmails <= 0) {
+            return List.of();
+        }
+        List<Message> messages = emailService.fetchUnreadEmailsByRange(maxEmails, startDate, endDate);
+        return processMessages(messages);
+    }
+
+    private List<EmailAnalysis> processMessages(List<Message> messages) {
         log.info("Found {} unread emails to analyze.", messages.size());
+        List<EmailAnalysis> processedAnalyses = new ArrayList<>();
 
         for (Message message : messages) {
             try {
@@ -63,7 +88,8 @@ public class AnalysisService {
                 }
 
                 // Save to DB
-                saveAnalysis(result);
+                EmailAnalysis savedAnalysis = saveAnalysis(result);
+                processedAnalyses.add(savedAnalysis);
 
                 log.info("Analysis Complete for email {}: Score {}", emailId, result.getCriticalityScore());
 
@@ -73,9 +99,10 @@ public class AnalysisService {
                 log.error("Analysis error for an email: {}", e.getMessage());
             }
         }
+        return processedAnalyses;
     }
 
-    private void saveAnalysis(EmailAnalysisResult result) {
+    private EmailAnalysis saveAnalysis(EmailAnalysisResult result) {
         EmailAnalysis entity = EmailAnalysis.builder()
                 .emailId(result.getEmailId())
                 .emailDate(result.getEmailDate())
@@ -93,6 +120,6 @@ public class AnalysisService {
                 .confidence(result.getConfidence())
                 .build();
 
-        repository.save(entity);
+        return repository.save(entity);
     }
 }

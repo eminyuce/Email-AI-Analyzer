@@ -60,6 +60,12 @@ public class AppSettings {
     @Column(name = "scheduler_cron")
     private String schedulerCron;
 
+    @Column(name = "scheduler_date_range_days")
+    private Integer schedulerDateRangeDays;
+
+    @Column(name = "scheduler_max_emails")
+    private Integer schedulerMaxEmails;
+
     public AppSettings() {
     }
 
@@ -152,6 +158,16 @@ public class AppSettings {
 
         public AppSettingsBuilder schedulerCron(String schedulerCron) {
             settings.setSchedulerCron(schedulerCron);
+            return this;
+        }
+
+        public AppSettingsBuilder schedulerDateRangeDays(Integer schedulerDateRangeDays) {
+            settings.setSchedulerDateRangeDays(schedulerDateRangeDays);
+            return this;
+        }
+
+        public AppSettingsBuilder schedulerMaxEmails(Integer schedulerMaxEmails) {
+            settings.setSchedulerMaxEmails(schedulerMaxEmails);
             return this;
         }
 
@@ -295,5 +311,21 @@ public class AppSettings {
 
     public void setSchedulerCron(String schedulerCron) {
         this.schedulerCron = schedulerCron;
+    }
+
+    public Integer getSchedulerDateRangeDays() {
+        return schedulerDateRangeDays;
+    }
+
+    public void setSchedulerDateRangeDays(Integer schedulerDateRangeDays) {
+        this.schedulerDateRangeDays = schedulerDateRangeDays;
+    }
+
+    public Integer getSchedulerMaxEmails() {
+        return schedulerMaxEmails;
+    }
+
+    public void setSchedulerMaxEmails(Integer schedulerMaxEmails) {
+        this.schedulerMaxEmails = schedulerMaxEmails;
     }
 }
