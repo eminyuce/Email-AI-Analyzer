@@ -84,25 +84,6 @@ jobs:
           # cache-from: type=gha
           # cache-to: type=gha,mode=max
 
-      # ────────────────────────────────────────────────────────────────
-      # Deploy to your server (still using :latest for simplicity)
-      # ────────────────────────────────────────────────────────────────
-      - name: Deploy to production server via SSH
-        if: github.ref == 'refs/heads/master'   # only deploy on master pushes (not on tags)
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            echo "Deploying latest version..."
-            docker pull ${{ steps.prepare.outputs.deploy_image }}
-            docker stop ${{ env.IMAGE_NAME }} || true
-            docker rm ${{ env.IMAGE_NAME }} || true
-            docker run -d --restart always \
-              -p 8080:8080 \
-              --name ${{ env.IMAGE_NAME }} \
-              ${{ steps.prepare.outputs.deploy_image }}
 
       # Optional: if you want to deploy a specific version when tagging a release
       - name: Notify or deploy tagged release (manual step reminder)
