@@ -336,6 +336,10 @@ public class AppSettingsService {
             return message;
         }
 
+        public Map<String, Object> getDetails() {
+            return details;
+        }
+
         public Map<String, Object> toResponseBody() {
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("success", success);

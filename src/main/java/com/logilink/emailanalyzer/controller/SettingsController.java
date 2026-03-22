@@ -3,8 +3,13 @@ package com.logilink.emailanalyzer.controller;
 import com.logilink.emailanalyzer.domain.AppSettings;
 import com.logilink.emailanalyzer.domain.EmailAnalysis;
 import com.logilink.emailanalyzer.model.ApiValidationError;
+import com.logilink.emailanalyzer.model.AiHealthResponse;
+import com.logilink.emailanalyzer.model.ConnectionTestResponse;
 import com.logilink.emailanalyzer.model.DefaultSettingsTestResponse;
 import com.logilink.emailanalyzer.model.EmailAnalysisReportDto;
+import com.logilink.emailanalyzer.model.EmailSubjectDto;
+import com.logilink.emailanalyzer.model.FetchEmailSubjectsResponse;
+import com.logilink.emailanalyzer.model.SchedulerControlResponse;
 import com.logilink.emailanalyzer.model.SettingsSaveResponse;
 import com.logilink.emailanalyzer.model.SettingsForm;
 import com.logilink.emailanalyzer.scheduler.EmailScheduler;
@@ -211,7 +216,7 @@ public class SettingsController {
 
     @PostMapping("/test-smtp")
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> testSmtp(@ModelAttribute SettingsForm form) {
+    public ResponseEntity<ConnectionTestResponse> testSmtp(@ModelAttribute SettingsForm form) {
         AppSettingsService.TestEndpointResult result = appSettingsService.testSmtpConnectionDetailed(
                 form.getMailHost(),
                 form.getMailPort(),
@@ -220,19 +225,19 @@ public class SettingsController {
                 form.getMailSslEnabled()
         );
         HttpStatus status = result.isSuccess() ? HttpStatus.OK : HttpStatus.BAD_REQUEST;
-        return ResponseEntity.status(status).body(result.toResponseBody());
+        return ResponseEntity.status(status).body(toConnectionTestResponse(result));
     }
 
     @PostMapping("/test-ai")
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> testAi(@ModelAttribute SettingsForm form) {
+    public ResponseEntity<ConnectionTestResponse> testAi(@ModelAttribute SettingsForm form) {
         AppSettingsService.TestEndpointResult result = appSettingsService.testAiChatConnectionDetailed(
                 form.getLlmUrl(),
                 form.getLlmModel(),
                 form.getLlmTemperature()
         );
         HttpStatus status = result.isSuccess() ? HttpStatus.OK : HttpStatus.BAD_REQUEST;
-        return ResponseEntity.status(status).body(result.toResponseBody());
+        return ResponseEntity.status(status).body(toConnectionTestResponse(result));
     }
 
     /**
@@ -241,7 +246,7 @@ public class SettingsController {
      */
     @GetMapping(path = "/api/core-test/ai-health", produces = "application/json")
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> testAiHealth(
+    public ResponseEntity<AiHealthResponse> testAiHealth(
             @RequestParam(value = "prompt", required = false) String prompt
     ) {
         String expectedToken = "OLLAMA_TEST_OK";
@@ -251,19 +256,19 @@ public class SettingsController {
             long durationMs = System.currentTimeMillis() - startedAt;
             boolean tokenMatched = response.contains(expectedToken);
 
-            Map<String, Object> body = new LinkedHashMap<>();
-            body.put("success", true);
-            body.put("message", "Ollama model responded to health-check request.");
-            body.put("expectedToken", expectedToken);
-            body.put("containsExpectedToken", tokenMatched);
-            body.put("durationMs", durationMs);
-            body.put("response", response);
+            AiHealthResponse body = new AiHealthResponse();
+            body.setSuccess(true);
+            body.setMessage("Ollama model responded to health-check request.");
+            body.setExpectedToken(expectedToken);
+            body.setContainsExpectedToken(tokenMatched);
+            body.setDurationMs(durationMs);
+            body.setResponse(response);
             return ResponseEntity.ok(body);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
-                    "success", false,
-                    "message", "AI health-check failed: " + e.getMessage()
-            ));
+            AiHealthResponse body = new AiHealthResponse();
+            body.setSuccess(false);
+            body.setMessage("AI health-check failed: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
         }
     }
 
@@ -273,11 +278,10 @@ public class SettingsController {
      */
     @GetMapping(path = "/api/core-test/fetch-subjects", produces = "application/json")
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> fetchEmailSubjects(
+    public ResponseEntity<FetchEmailSubjectsResponse> fetchEmailSubjects(
             @RequestParam(value = "maxEmails", required = false) Integer maxEmails,
             @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
-            @RequestParam(value = "unreadOnly", defaultValue = "false") boolean unreadOnly
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate
     ) {
         try {
             int effectiveMaxEmails = maxEmails != null && maxEmails > 0
@@ -289,68 +293,67 @@ public class SettingsController {
                     : effectiveEndDate.minusDays(appSettingsService.getSchedulerDateRangeDaysOrDefault());
 
             if (effectiveStartDate.isAfter(effectiveEndDate)) {
-                return ResponseEntity.badRequest().body(Map.of(
-                        "success", false,
-                        "message", "startDate must be before endDate."
-                ));
+                FetchEmailSubjectsResponse response = new FetchEmailSubjectsResponse();
+                response.setSuccess(false);
+                response.setMessage("startDate must be before endDate.");
+                return ResponseEntity.badRequest().body(response);
             }
 
             Date rangeStart = Date.from(effectiveStartDate.atZone(ZoneId.systemDefault()).toInstant());
             Date rangeEnd = Date.from(effectiveEndDate.atZone(ZoneId.systemDefault()).toInstant());
-            List<Message> messages = emailService.fetchEmailsByRange(effectiveMaxEmails, rangeStart, rangeEnd, unreadOnly);
+            List<Message> messages = emailService.fetchEmailsByRange(effectiveMaxEmails, rangeStart, rangeEnd);
 
-            List<Map<String, Object>> subjects = new ArrayList<>();
+            List<EmailSubjectDto> subjects = new ArrayList<>();
             for (Message message : messages) {
-                subjects.add(Map.of(
-                        "subject", safeSubject(message),
-                        "receivedAt", message.getReceivedDate() != null ? message.getReceivedDate().toInstant().toString() : "",
-                        "from", safeFrom(message)
+                subjects.add(new EmailSubjectDto(
+                        safeSubject(message),
+                        message.getReceivedDate() != null ? message.getReceivedDate().toInstant().toString() : "",
+                        safeFrom(message)
                 ));
             }
 
-            Map<String, Object> response = new LinkedHashMap<>();
-            response.put("success", true);
-            response.put("message", "Email fetch test completed.");
-            response.put("mailboxHost", appSettingsService.getRequiredMailSettings().getMailHost());
-            response.put("unreadOnly", unreadOnly);
-            response.put("requestedMaxEmails", effectiveMaxEmails);
-            response.put("fetchedCount", subjects.size());
-            response.put("startDate", effectiveStartDate.toString());
-            response.put("endDate", effectiveEndDate.toString());
-            response.put("subjects", subjects);
+            FetchEmailSubjectsResponse response = new FetchEmailSubjectsResponse();
+            response.setSuccess(true);
+            response.setMessage("Email fetch test completed.");
+            response.setMailboxHost(appSettingsService.getRequiredMailSettings().getMailHost());
+            response.setRequestedMaxEmails(effectiveMaxEmails);
+            response.setFetchedCount(subjects.size());
+            response.setStartDate(effectiveStartDate.toString());
+            response.setEndDate(effectiveEndDate.toString());
+            response.setSubjects(subjects);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
-                    "success", false,
-                    "message", "Email fetch test failed: " + e.getMessage()
-            ));
+            FetchEmailSubjectsResponse response = new FetchEmailSubjectsResponse();
+            response.setSuccess(false);
+            response.setMessage("Email fetch test failed: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
 
     @PostMapping("/scheduler/start")
     @ResponseBody
-    public Map<String, Object> startScheduler(@ModelAttribute SettingsForm form) {
+    public ResponseEntity<SchedulerControlResponse> startScheduler(@ModelAttribute SettingsForm form) {
         if (form.getSchedulerCron() != null && !form.getSchedulerCron().isBlank()) {
             appSettingsService.updateSchedulerCron(form.getSchedulerCron());
             emailScheduler.applyCron(form.getSchedulerCron());
         }
         emailScheduler.startWithCurrentSettings();
-        return Map.of(
-                "success", true,
-                "running", emailScheduler.isRunning(),
-                "message", "Email processing started."
-        );
+        SchedulerControlResponse response = new SchedulerControlResponse();
+        response.setSuccess(true);
+        response.setRunning(emailScheduler.isRunning());
+        response.setMessage("Email processing started.");
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/scheduler/stop")
     @ResponseBody
-    public Map<String, Object> stopScheduler() {
+    public ResponseEntity<SchedulerControlResponse> stopScheduler() {
         emailScheduler.stopProcessing();
-        return Map.of(
-                "success", true,
-                "running", emailScheduler.isRunning(),
-                "message", "Email processing stopped."
-        );
+        SchedulerControlResponse response = new SchedulerControlResponse();
+        response.setSuccess(true);
+        response.setRunning(emailScheduler.isRunning());
+        response.setMessage("Email processing stopped.");
+        return ResponseEntity.ok(response);
     }
 
     private void applySettings(SettingsForm settingsForm) {
@@ -394,6 +397,29 @@ public class SettingsController {
         } catch (MessagingException e) {
             return "";
         }
+    }
+
+    private ConnectionTestResponse toConnectionTestResponse(AppSettingsService.TestEndpointResult result) {
+        ConnectionTestResponse response = new ConnectionTestResponse();
+        response.setSuccess(result.isSuccess());
+        response.setMessage(result.getMessage());
+        Map<String, Object> details = result.getDetails();
+        response.setSmtpHost(asString(details.get("smtpHost")));
+        response.setSmtpPort(asInteger(details.get("smtpPort")));
+        response.setStatusCode(asInteger(details.get("statusCode")));
+        response.setModel(asString(details.get("model")));
+        return response;
+    }
+
+    private Integer asInteger(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        return null;
+    }
+
+    private String asString(Object value) {
+        return value != null ? value.toString() : null;
     }
 
     private String loadDefaultSystemPrompt() {

@@ -43,7 +43,7 @@ public class AnalysisService {
             return List.of();
         }
 
-        List<Message> messages = emailService.fetchUnreadEmails(maxEmails);
+        List<Message> messages = emailService.fetchEmails(maxEmails);
         return processMessages(messages);
     }
 
@@ -52,12 +52,12 @@ public class AnalysisService {
         if (maxEmails <= 0) {
             return List.of();
         }
-        List<Message> messages = emailService.fetchUnreadEmailsByRange(maxEmails, startDate, endDate);
+        List<Message> messages = emailService.fetchEmailsByRange(maxEmails, startDate, endDate);
         return processMessages(messages);
     }
 
     private List<EmailAnalysis> processMessages(List<Message> messages) {
-        log.info("Found {} unread emails to analyze.", messages.size());
+        log.info("Found {} emails to analyze.", messages.size());
         List<EmailAnalysis> processedAnalyses = new ArrayList<>();
 
         for (Message message : messages) {

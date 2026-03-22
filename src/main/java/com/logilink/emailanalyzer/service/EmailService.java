@@ -49,6 +49,21 @@ public class EmailService {
         return fetchEmailsByRange(maxEmails, startDate, endDate, true);
     }
 
+    public List<Message> fetchEmails(int maxEmails) {
+        if (maxEmails <= 0) {
+            return List.of();
+        }
+
+        Instant now = Instant.now();
+        Date endDate = Date.from(now);
+        Date startDate = Date.from(now.minus(DEFAULT_LOOKBACK_DAYS, ChronoUnit.DAYS));
+        return fetchEmailsByRange(maxEmails, startDate, endDate, false);
+    }
+
+    public List<Message> fetchEmailsByRange(int maxEmails, Date startDate, Date endDate) {
+        return fetchEmailsByRange(maxEmails, startDate, endDate, false);
+    }
+
     public List<Message> fetchEmailsByRange(int maxEmails, Date startDate, Date endDate, boolean unreadOnly) {
         if (maxEmails <= 0) {
             return List.of();
@@ -58,7 +73,7 @@ public class EmailService {
         }
 
         AppSettings settings = appSettingsService.getRequiredMailSettings();
-        List<Message> unreadMessages = new ArrayList<>();
+        List<Message> messages = new ArrayList<>();
         Properties properties = new Properties();
         properties.put("mail.store.protocol", "imaps");
         properties.put("mail.imaps.host", settings.getMailHost());
@@ -91,15 +106,15 @@ public class EmailService {
 
             int count = 0;
             for (int i = foundMessages.length - 1; i >= 0 && count < maxEmails; i--) {
-                unreadMessages.add(foundMessages[i]);
+                messages.add(foundMessages[i]);
                 count++;
             }
 
-            if (!unreadMessages.isEmpty()) {
+            if (!messages.isEmpty()) {
                 FetchProfile fetchProfile = new FetchProfile();
                 fetchProfile.add(FetchProfile.Item.ENVELOPE);
                 fetchProfile.add(FetchProfile.Item.CONTENT_INFO);
-                emailFolder.fetch(unreadMessages.toArray(new Message[0]), fetchProfile);
+                emailFolder.fetch(messages.toArray(new Message[0]), fetchProfile);
             }
 
         } catch (Exception e) {
@@ -121,7 +136,7 @@ public class EmailService {
                 }
             }
         }
-        return unreadMessages;
+        return messages;
     }
 
     public String getEmailId(Message message) throws MessagingException {
