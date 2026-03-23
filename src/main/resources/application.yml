@@ -48,8 +48,7 @@ logging:
     com.logilink.emailanalyzer: DEBUG
 
 management:
-  server:
-    port: 8081
+  # Shares server.port: a separate management.server.port serves only actuator, not /api/**.
   endpoints:
     web:
       exposure:
