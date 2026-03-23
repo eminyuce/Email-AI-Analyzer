@@ -2,6 +2,8 @@ package com.logilink.emailanalyzer.controller;
 
 import com.logilink.emailanalyzer.domain.AppSettings;
 import com.logilink.emailanalyzer.domain.EmailAnalysis;
+import com.logilink.emailanalyzer.mapper.AppSettingsMapper;
+import com.logilink.emailanalyzer.mapper.EmailAnalysisMapper;
 import com.logilink.emailanalyzer.model.ApiValidationError;
 import com.logilink.emailanalyzer.model.AiHealthResponse;
 import com.logilink.emailanalyzer.model.ConnectionTestResponse;
@@ -57,25 +59,31 @@ public class SettingsController {
     private final AnalysisService analysisService;
     private final EmailService emailService;
     private final AIService aiService;
+    private final AppSettingsMapper appSettingsMapper;
+    private final EmailAnalysisMapper emailAnalysisMapper;
 
     public SettingsController(
             AppSettingsService appSettingsService,
             EmailScheduler emailScheduler,
             AnalysisService analysisService,
             EmailService emailService,
-            AIService aiService
+            AIService aiService,
+            AppSettingsMapper appSettingsMapper,
+            EmailAnalysisMapper emailAnalysisMapper
     ) {
         this.appSettingsService = appSettingsService;
         this.emailScheduler = emailScheduler;
         this.analysisService = analysisService;
         this.emailService = emailService;
         this.aiService = aiService;
+        this.appSettingsMapper = appSettingsMapper;
+        this.emailAnalysisMapper = emailAnalysisMapper;
     }
 
     @GetMapping
     public String settings(Model model) {
         if (!model.containsAttribute("settingsForm")) {
-            SettingsForm form = SettingsForm.from(appSettingsService.getOrCreate());
+            SettingsForm form = appSettingsMapper.toSettingsForm(appSettingsService.getOrCreate());
             if (form.getSchedulerDateRangeDays() == null) {
                 form.setSchedulerDateRangeDays(appSettingsService.getSchedulerDateRangeDaysOrDefault());
             }
@@ -186,7 +194,7 @@ public class SettingsController {
             List<EmailAnalysis> analyzedEmails = analysisService.processEmails(emailCount, rangeStart, rangeEnd);
             List<EmailAnalysisReportDto> reports = new ArrayList<>();
             for (EmailAnalysis analyzedEmail : analyzedEmails) {
-                reports.add(EmailAnalysisReportDto.from(analyzedEmail));
+                reports.add(emailAnalysisMapper.toReportDto(analyzedEmail));
             }
 
             response.setSuccess(true);

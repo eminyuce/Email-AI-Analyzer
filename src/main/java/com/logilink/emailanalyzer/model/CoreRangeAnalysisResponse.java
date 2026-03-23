@@ -1,27 +1,32 @@
 package com.logilink.emailanalyzer.model;
 
-import lombok.Getter;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-@Getter
-@Setter
+@Data
+@Builder
 @NoArgsConstructor
-public class DefaultSettingsTestResponse {
+@AllArgsConstructor
+public class CoreRangeAnalysisResponse {
 
     private boolean success;
     private String message;
-    private boolean schedulerRunning;
-    private String mailUsername;
-    private String llmModel;
-    private boolean schedulerCronChanged;
-    private int requestedEmailCount;
+    private String systemPromptPath;
+    private int requestedMaxEmails;
+    private int fetchedEmailCount;
     private int analyzedEmailCount;
+    private int savedEmailCount;
+    private int skippedEmailCount;
     private LocalDateTime rangeStart;
     private LocalDateTime rangeEnd;
+    @Builder.Default
     private List<EmailAnalysisReportDto> analyzedEmailReports = new ArrayList<>();
+    @Builder.Default
+    private List<String> errors = new ArrayList<>();
 }

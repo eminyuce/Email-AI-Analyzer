@@ -1,8 +1,17 @@
 package com.logilink.emailanalyzer.model;
 
-import com.logilink.emailanalyzer.domain.AppSettings;
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
+@Getter
+@Setter
+@NoArgsConstructor
 public class SettingsForm {
 
     @NotBlank(message = "Mail host is required")
@@ -25,7 +34,6 @@ public class SettingsForm {
     @NotBlank(message = "System prompt is required")
     private String systemPrompt;
 
-    // LLM Settings
     @NotBlank(message = "LLM model is required")
     private String llmModel;
 
@@ -47,132 +55,4 @@ public class SettingsForm {
 
     @Min(value = 1, message = "Max emails must be at least 1")
     private Integer schedulerMaxEmails;
-
-    public SettingsForm() {
-    }
-
-    public static SettingsForm from(AppSettings settings) {
-        SettingsForm form = new SettingsForm();
-        form.setMailHost(settings.getMailHost());
-        form.setMailPort(settings.getMailPort());
-        form.setMailUsername(settings.getMailUsername());
-        form.setMailPassword(settings.getMailPassword());
-        form.setMailSslEnabled(settings.getMailSslEnabled());
-        form.setSystemPrompt(settings.getSystemPrompt());
-
-        form.setLlmModel(settings.getLlmModel());
-        form.setLlmUrl(settings.getLlmUrl());
-        form.setLlmTemperature(settings.getLlmTemperature());
-        form.setSchedulerEnabled(settings.getSchedulerEnabled());
-        form.setSchedulerCron(settings.getSchedulerCron());
-        form.setSchedulerDateRangeDays(settings.getSchedulerDateRangeDays());
-        form.setSchedulerMaxEmails(settings.getSchedulerMaxEmails());
-
-        return form;
-    }
-
-    // Getters and Setters
-    public String getMailHost() {
-        return mailHost;
-    }
-
-    public void setMailHost(String mailHost) {
-        this.mailHost = mailHost;
-    }
-
-    public Integer getMailPort() {
-        return mailPort;
-    }
-
-    public void setMailPort(Integer mailPort) {
-        this.mailPort = mailPort;
-    }
-
-    public String getMailUsername() {
-        return mailUsername;
-    }
-
-    public void setMailUsername(String mailUsername) {
-        this.mailUsername = mailUsername;
-    }
-
-    public String getMailPassword() {
-        return mailPassword;
-    }
-
-    public void setMailPassword(String mailPassword) {
-        this.mailPassword = mailPassword;
-    }
-
-    public Boolean getMailSslEnabled() {
-        return mailSslEnabled;
-    }
-
-    public void setMailSslEnabled(Boolean mailSslEnabled) {
-        this.mailSslEnabled = mailSslEnabled;
-    }
-
-    public String getSystemPrompt() {
-        return systemPrompt;
-    }
-
-    public void setSystemPrompt(String systemPrompt) {
-        this.systemPrompt = systemPrompt;
-    }
-
-    public String getLlmModel() {
-        return llmModel;
-    }
-
-    public void setLlmModel(String llmModel) {
-        this.llmModel = llmModel;
-    }
-
-    public String getLlmUrl() {
-        return llmUrl;
-    }
-
-    public void setLlmUrl(String llmUrl) {
-        this.llmUrl = llmUrl;
-    }
-
-    public Double getLlmTemperature() {
-        return llmTemperature;
-    }
-
-    public void setLlmTemperature(Double llmTemperature) {
-        this.llmTemperature = llmTemperature;
-    }
-
-    public Boolean getSchedulerEnabled() {
-        return schedulerEnabled;
-    }
-
-    public void setSchedulerEnabled(Boolean schedulerEnabled) {
-        this.schedulerEnabled = schedulerEnabled;
-    }
-
-    public String getSchedulerCron() {
-        return schedulerCron;
-    }
-
-    public void setSchedulerCron(String schedulerCron) {
-        this.schedulerCron = schedulerCron;
-    }
-
-    public Integer getSchedulerDateRangeDays() {
-        return schedulerDateRangeDays;
-    }
-
-    public void setSchedulerDateRangeDays(Integer schedulerDateRangeDays) {
-        this.schedulerDateRangeDays = schedulerDateRangeDays;
-    }
-
-    public Integer getSchedulerMaxEmails() {
-        return schedulerMaxEmails;
-    }
-
-    public void setSchedulerMaxEmails(Integer schedulerMaxEmails) {
-        this.schedulerMaxEmails = schedulerMaxEmails;
-    }
 }

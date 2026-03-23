@@ -1,5 +1,12 @@
 package com.logilink.emailanalyzer.model;
 
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
+@NoArgsConstructor
 public class ConnectionTestResponse {
 
     private boolean success;
@@ -8,55 +15,4 @@ public class ConnectionTestResponse {
     private Integer smtpPort;
     private Integer statusCode;
     private String model;
-
-    public ConnectionTestResponse() {
-    }
-
-    public boolean isSuccess() {
-        return success;
-    }
-
-    public void setSuccess(boolean success) {
-        this.success = success;
-    }
-
-    public String getMessage() {
-        return message;
-    }
-
-    public void setMessage(String message) {
-        this.message = message;
-    }
-
-    public String getSmtpHost() {
-        return smtpHost;
-    }
-
-    public void setSmtpHost(String smtpHost) {
-        this.smtpHost = smtpHost;
-    }
-
-    public Integer getSmtpPort() {
-        return smtpPort;
-    }
-
-    public void setSmtpPort(Integer smtpPort) {
-        this.smtpPort = smtpPort;
-    }
-
-    public Integer getStatusCode() {
-        return statusCode;
-    }
-
-    public void setStatusCode(Integer statusCode) {
-        this.statusCode = statusCode;
-    }
-
-    public String getModel() {
-        return model;
-    }
-
-    public void setModel(String model) {
-        this.model = model;
-    }
 }

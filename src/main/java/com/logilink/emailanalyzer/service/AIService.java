@@ -3,6 +3,7 @@ package com.logilink.emailanalyzer.service;
 import com.logilink.emailanalyzer.domain.AppSettings;
 import com.logilink.emailanalyzer.exception.EmailAnalysisException;
 import com.logilink.emailanalyzer.model.EmailAnalysisResult;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -23,9 +24,16 @@ public class AIService {
     }
 
     public EmailAnalysisResult analyzeEmail(String emailId, String subject, String sender, String content) {
+        return analyzeEmail(emailId, subject, sender, content, null);
+    }
+
+    public EmailAnalysisResult analyzeEmail(String emailId, String subject, String sender, String content, String systemPromptOverride) {
         try {
             AppSettings settings = appSettingsService.getOrCreate();
             ChatClient chatClient = buildChatClient(settings);
+            String systemPrompt = StringUtils.isNotBlank(systemPromptOverride)
+                    ? systemPromptOverride
+                    : settings.getSystemPrompt();
 
             String userPrompt = String.format("""
                     Email ID: %s
@@ -36,7 +44,7 @@ public class AIService {
                     """, emailId, subject, sender, content);
 
             return chatClient.prompt()
-                    .system(settings.getSystemPrompt())
+                    .system(systemPrompt)
                     .user(userPrompt)
                     .call()
                     .entity(EmailAnalysisResult.class);
