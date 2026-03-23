@@ -9,11 +9,25 @@ services:
       MYSQL_ROOT_PASSWORD: rootpassword
     ports:
       - "3306:3306"
+    networks:
+      - app-network
+      - monitoring-network
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  mysql-exporter:
+    image: prom/mysqld-exporter:latest
+    container_name: mysql_exporter
+    environment:
+      DATA_SOURCE_NAME: "email_user:password@(db:3306)/email_db"
+    networks:
+      - monitoring-network
+    depends_on:
+      db:
+        condition: service_healthy
 
   ollama:
     image: ollama/ollama:latest
@@ -29,6 +43,9 @@ services:
               capabilities: [gpu]
     volumes:
       - ollama_data:/root/.ollama
+    networks:
+      - app-network
+      - monitoring-network
 
   app:
     build: .
@@ -41,8 +58,42 @@ services:
       SPRING_DATASOURCE_USERNAME: email_user
       SPRING_DATASOURCE_PASSWORD: password
       SPRING_AI_OLLAMA_BASE_URL: http://ollama:11434
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,info,prometheus,metrics"
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: "always"
     ports:
       - "8080:8080"
+    networks:
+      - app-network
+      - monitoring-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - monitoring-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - monitoring-network
+
+networks:
+  app-network:
+    driver: bridge
+  monitoring-network:
+    driver: bridge
 
 volumes:
   ollama_data:
+  prometheus_data:
+  grafana_data:

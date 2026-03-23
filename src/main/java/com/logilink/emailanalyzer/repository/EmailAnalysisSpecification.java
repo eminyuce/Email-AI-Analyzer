@@ -45,14 +45,6 @@ public class EmailAnalysisSpecification {
                 predicates.add(cb.lessThanOrEqualTo(root.get("emailDate"), dateTo));
             }
 
-            if (stakeholders != null && !stakeholders.isEmpty()) {
-                // This part depends on how Hibernate maps JSONB to List
-                // For a simple implementation, we can use a native query or handle it in service
-                // But let's try a basic approach if possible or leave it for now.
-                // Hibernate 6 can handle some JSON path expressions.
-                // For simplicity and compatibility, we'll use a placeholder or simplified logic.
-            }
-
             return cb.and(predicates.toArray(new Predicate[0]));
         };
     }

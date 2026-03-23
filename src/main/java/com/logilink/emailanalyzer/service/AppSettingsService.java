@@ -1,11 +1,15 @@
 package com.logilink.emailanalyzer.service;
 
+import com.logilink.emailanalyzer.common.AppConstants;
 import com.logilink.emailanalyzer.domain.AppSettings;
 import com.logilink.emailanalyzer.exception.EmailAnalysisException;
 import com.logilink.emailanalyzer.model.SettingsForm;
 import com.logilink.emailanalyzer.repository.AppSettingsRepository;
 import jakarta.mail.Session;
 import jakarta.mail.Transport;
+import org.apache.commons.collections4.MapUtils;
+import org.apache.commons.lang3.ObjectUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,22 +29,31 @@ import java.util.Properties;
 @Service
 public class AppSettingsService {
 
-    private static final Logger log = LoggerFactory.getLogger(AppSettingsService.class);
-    private final AppSettingsRepository repository;
-    private final String defaultSchedulerCron;
-    private final int defaultSchedulerDateRangeDays;
-    private final int defaultSchedulerMaxEmails;
+  private static final Logger log = LoggerFactory.getLogger(AppSettingsService.class);
+  private static final String SMTP_PREFIX = "smtp.";
+  private static final String IMAP_PREFIX = "imap.";
+
+  private final AppSettingsRepository repository;
+  private final String defaultSchedulerCron;
+  private final int defaultSchedulerDateRangeDays;
+  private final int defaultSchedulerMaxEmails;
+  private final int aiTestConnectTimeoutSeconds;
+  private final int aiTestRequestTimeoutSeconds;
 
     public AppSettingsService(
             AppSettingsRepository repository,
             @Value("${email.analysis.cron:0 */5 * * * *}") String defaultSchedulerCron,
             @Value("${email.analysis.default-date-range-days:1}") int defaultSchedulerDateRangeDays,
-            @Value("${email.analysis.default-max-emails:1000}") int defaultSchedulerMaxEmails
+            @Value("${email.analysis.default-max-emails:1000}") int defaultSchedulerMaxEmails,
+            @Value("${ai.test.connect-timeout-seconds:10}") int aiTestConnectTimeoutSeconds,
+            @Value("${ai.test.request-timeout-seconds:75}") int aiTestRequestTimeoutSeconds
     ) {
         this.repository = repository;
         this.defaultSchedulerCron = defaultSchedulerCron;
         this.defaultSchedulerDateRangeDays = defaultSchedulerDateRangeDays;
         this.defaultSchedulerMaxEmails = defaultSchedulerMaxEmails;
+        this.aiTestConnectTimeoutSeconds = aiTestConnectTimeoutSeconds;
+        this.aiTestRequestTimeoutSeconds = aiTestRequestTimeoutSeconds;
     }
 
     @Transactional
@@ -107,8 +120,8 @@ public class AppSettingsService {
     @Transactional(readOnly = true)
     public String getRequiredSystemPrompt() {
         String prompt = getExistingSettings().getSystemPrompt();
-        if (prompt == null || prompt.isBlank()) {
-            throw new EmailAnalysisException("System prompt is not configured. Please update it on /settings.");
+        if (StringUtils.isBlank(prompt)) {
+            throw new EmailAnalysisException(AppConstants.Messages.SYSTEM_PROMPT_MISSING);
         }
         return prompt;
     }
@@ -121,7 +134,7 @@ public class AppSettingsService {
                 || isBlank(settings.getMailUsername())
                 || isBlank(settings.getMailPassword())
                 || settings.getMailSslEnabled() == null) {
-            throw new EmailAnalysisException("Email server settings are not configured. Please update them on /settings.");
+            throw new EmailAnalysisException(AppConstants.Messages.EMAIL_SETTINGS_MISSING);
         }
         return settings;
     }
@@ -135,7 +148,9 @@ public class AppSettingsService {
             return TestEndpointResult.failure("Missing SMTP settings. host, port, username and password are required.");
         }
 
-        String smtpHost = host.startsWith("imap.") ? "smtp." + host.substring("imap.".length()) : host;
+        String smtpHost = host.startsWith(IMAP_PREFIX)
+            ? SMTP_PREFIX + host.substring(IMAP_PREFIX.length())
+            : host;
         int smtpPort = (port == 993) ? (Boolean.TRUE.equals(sslEnabled) ? 465 : 587) : port;
 
         try {
@@ -180,21 +195,23 @@ public class AppSettingsService {
         String payload = "{\"model\":\"" + escapeJson(llmModel) + "\","
                 + "\"prompt\":\"Reply with only OK\","
                 + "\"stream\":false,"
-                + "\"options\":{\"temperature\":" + temperature + "}}";
+                + "\"options\":{\"temperature\":" + temperature + ",\"num_predict\":8}}";
 
         try {
             HttpClient client = HttpClient.newBuilder()
-                    .connectTimeout(Duration.ofSeconds(5))
+                    .connectTimeout(Duration.ofSeconds(aiTestConnectTimeoutSeconds))
                     .build();
 
+            long startedAt = System.currentTimeMillis();
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(baseUrl + "/api/generate"))
-                    .timeout(Duration.ofSeconds(15))
+                    .timeout(Duration.ofSeconds(aiTestRequestTimeoutSeconds))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(payload))
                     .build();
 
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            long durationMs = System.currentTimeMillis() - startedAt;
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 return TestEndpointResult.failure("AI chat test failed with HTTP status " + response.statusCode() + ".");
             }
@@ -206,7 +223,7 @@ public class AppSettingsService {
             }
             return TestEndpointResult.success(
                     "AI chat test successful.",
-                    Map.of("statusCode", response.statusCode(), "model", llmModel)
+                    Map.of("statusCode", response.statusCode(), "model", llmModel, "durationMs", durationMs)
             );
         } catch (Exception e) {
             log.error("AI chat connection test failed: {}", e.getMessage());
@@ -270,15 +287,15 @@ public class AppSettingsService {
 
     private AppSettings getExistingSettings() {
         return repository.findById(AppSettings.SINGLETON_ID)
-                .orElseThrow(() -> new EmailAnalysisException("Settings not found. Please configure /settings first."));
+                .orElseThrow(() -> new EmailAnalysisException(AppConstants.Messages.SETTINGS_NOT_FOUND));
     }
 
     private static String trim(String value) {
-        return value == null ? null : value.trim();
+        return StringUtils.trimToNull(value);
     }
 
     private static boolean isBlank(String value) {
-        return value == null || value.isBlank();
+        return StringUtils.isBlank(value);
     }
 
     private static String escapeJson(String value) {
@@ -290,12 +307,12 @@ public class AppSettingsService {
 
     private static void validateCron(String cron) {
         if (isBlank(cron)) {
-            throw new EmailAnalysisException("Cron expression cannot be empty.");
+            throw new EmailAnalysisException(AppConstants.Messages.CRON_REQUIRED);
         }
         try {
             CronExpression.parse(cron);
         } catch (Exception ex) {
-            throw new EmailAnalysisException("Invalid cron expression. Use 6-field Spring cron format.", ex);
+            throw new EmailAnalysisException(AppConstants.Messages.CRON_INVALID, ex);
         }
     }
 
@@ -306,7 +323,7 @@ public class AppSettingsService {
     }
 
     private static boolean same(Object left, Object right) {
-        return left == null ? right == null : left.equals(right);
+        return ObjectUtils.equals(left, right);
     }
 
     public static final class TestEndpointResult {
@@ -317,7 +334,7 @@ public class AppSettingsService {
         private TestEndpointResult(boolean success, String message, Map<String, Object> details) {
             this.success = success;
             this.message = message;
-            this.details = details == null ? Map.of() : Map.copyOf(details);
+            this.details = MapUtils.isEmpty(details) ? Map.of() : Map.copyOf(details);
         }
 
         public static TestEndpointResult success(String message, Map<String, Object> details) {

@@ -1,0 +1,21 @@
+I want to implement Spring Boot 3.x Actuator for deep observability. Please provide a complete implementation including:
+
+pom.xml Dependencies: Include Actuator, Prometheus Micrometer registry, and Spring Security. Ensure the spring-boot-maven-plugin is configured to generate build info.
+
+application.yml (Security & Best Practices): >     * Expose metrics, prometheus, httpexchanges, and info.
+
+Set show-details: always for health.
+
+Crucial: Isolate the Actuator endpoints on a different port (e.g., 8081) from the main application.
+
+Enable info.build.enabled and info.env.enabled.
+
+Security Configuration: Provide a SecurityFilterChain that permits /actuator/health but requires ROLE_ADMIN and Basic Auth for all other actuator paths.
+
+Custom Metrics Implementation: >     * In a @Service class, show the injection of MeterRegistry.
+
+Implement a Counter for transactions.failed and a Gauge using an AtomicInteger for orders.active.
+
+Include a Tag (e.g., env=production) in the metrics.
+
+Output Analysis: Explain exactly how to query the specific value of the new 'Active Orders' gauge via the /actuator/metrics JSON path.

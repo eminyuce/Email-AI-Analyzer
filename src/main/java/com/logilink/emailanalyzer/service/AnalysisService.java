@@ -1,8 +1,11 @@
 package com.logilink.emailanalyzer.service;
 
+import com.logilink.emailanalyzer.common.AppConstants;
 import com.logilink.emailanalyzer.domain.EmailAnalysis;
 import com.logilink.emailanalyzer.model.EmailAnalysisResult;
 import com.logilink.emailanalyzer.repository.EmailAnalysisRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
 import org.slf4j.Logger;
@@ -16,45 +19,78 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
 import java.util.List;
+import java.util.function.Supplier;
 
 @Service
 public class AnalysisService {
 
-    private static final Logger log = LoggerFactory.getLogger(AnalysisService.class);
+  private static final Logger log = LoggerFactory.getLogger(AnalysisService.class);
 
-    private final EmailService emailService;
-    private final AIService aiService;
-    private final EmailAnalysisRepository repository;
+  private final EmailService emailService;
+  private final AIService aiService;
+  private final EmailAnalysisRepository repository;
+  private final MeterRegistry meterRegistry;
 
-    public AnalysisService(EmailService emailService, AIService aiService, EmailAnalysisRepository repository) {
-        this.emailService = emailService;
-        this.aiService = aiService;
-        this.repository = repository;
+  public AnalysisService(
+      EmailService emailService,
+      AIService aiService,
+      EmailAnalysisRepository repository,
+      MeterRegistry meterRegistry
+  ) {
+    this.emailService = emailService;
+    this.aiService = aiService;
+    this.repository = repository;
+    this.meterRegistry = meterRegistry;
+  }
+
+  @Transactional
+  public List<EmailAnalysis> processEmails() {
+    return processEmails(Integer.MAX_VALUE);
+  }
+
+  @Transactional
+  public List<EmailAnalysis> processEmails(int maxEmails) {
+    return recordLatency("processEmails", () -> {
+      if (maxEmails <= 0) {
+        return List.of();
+      }
+      List<Message> messages = emailService.fetchEmails(maxEmails);
+      return processMessages(messages);
+    });
+  }
+
+  @Transactional
+  public List<EmailAnalysis> processEmails(int maxEmails, Date startDate, Date endDate) {
+    return recordLatency("processEmailsByRange", () -> {
+      if (maxEmails <= 0) {
+        return List.of();
+      }
+      List<Message> messages = emailService.fetchEmailsByRange(maxEmails, startDate, endDate);
+      return processMessages(messages);
+    });
+  }
+
+  /**
+   * Wraps high-traffic email processing paths with latency timing and outcome tags.
+   */
+  private List<EmailAnalysis> recordLatency(String operation, Supplier<List<EmailAnalysis>> work) {
+    Timer.Sample sample = Timer.start(meterRegistry);
+    String outcome = "success";
+    try {
+      return work.get();
+    } catch (RuntimeException ex) {
+      outcome = "error";
+      throw ex;
+    } finally {
+      sample.stop(
+          Timer.builder(AppConstants.Metrics.PROCESSING_LATENCY_METRIC)
+              .description("End-to-end email processing latency")
+              .tag("operation", operation)
+              .tag("outcome", outcome)
+              .register(meterRegistry)
+      );
     }
-
-    @Transactional
-    public List<EmailAnalysis> processEmails() {
-        return processEmails(Integer.MAX_VALUE);
-    }
-
-    @Transactional
-    public List<EmailAnalysis> processEmails(int maxEmails) {
-        if (maxEmails <= 0) {
-            return List.of();
-        }
-
-        List<Message> messages = emailService.fetchEmails(maxEmails);
-        return processMessages(messages);
-    }
-
-    @Transactional
-    public List<EmailAnalysis> processEmails(int maxEmails, Date startDate, Date endDate) {
-        if (maxEmails <= 0) {
-            return List.of();
-        }
-        List<Message> messages = emailService.fetchEmailsByRange(maxEmails, startDate, endDate);
-        return processMessages(messages);
-    }
+  }
 
     private List<EmailAnalysis> processMessages(List<Message> messages) {
         log.info("Found {} emails to analyze.", messages.size());

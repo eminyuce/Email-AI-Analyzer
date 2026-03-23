@@ -1,5 +1,5 @@
 server:
-  port: 8081
+  port: 8080
   forward-headers-strategy: framework
 
 spring:
@@ -27,12 +27,64 @@ spring:
           temperature: 0.3
 
 email:
+  imap:
+    connection-timeout-ms: 10000
+    timeout-ms: 20000
+    write-timeout-ms: 20000
+    ssl-trust: "*"
   analysis:
     cron: "0 */5 * * * *"
     default-date-range-days: 1
     default-max-emails: 1000
 
+ai:
+  test:
+    connect-timeout-seconds: 10
+    request-timeout-seconds: 75
+
 logging:
   level:
     root: INFO
     com.logilink.emailanalyzer: DEBUG
+
+management:
+  server:
+    port: 8081
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,httpexchanges
+  endpoint:
+    health:
+      show-details: always
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  metrics:
+    tags:
+      application: my-app
+      region: us-east-1
+      env: prod
+    enable:
+      hikaricp: true
+      tomcat: true
+      logback: true
+    distribution:
+      slo:
+        analysis.processing.latency: 50ms,100ms,500ms
+      percentiles:
+        analysis.processing.latency: 0.95,0.99
+      percentiles-histogram:
+        analysis.processing.latency: true
+
+info:
+  build:
+    enabled: true
+  env:
+    enabled: true
+
+actuator:
+  security:
+    username: ${ACTUATOR_ADMIN_USERNAME:actuator-admin}
+    password: ${ACTUATOR_ADMIN_PASSWORD:change-me}
