@@ -5,6 +5,7 @@ import com.logilink.emailanalyzer.model.CoreRangeAnalysisRequest;
 import com.logilink.emailanalyzer.model.CoreRangeAnalysisResponse;
 import com.logilink.emailanalyzer.service.CoreRangeAnalysisService;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,6 +21,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/core-test")
+@PreAuthorize("hasRole('ADMIN')")
 public class CoreRangeAnalysisController {
 
     private final CoreRangeAnalysisService coreRangeAnalysisService;

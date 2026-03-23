@@ -19,41 +19,50 @@
             <!-- Main Content Card -->
             <div class="card mb-4">
                 <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0" th:text="${email.subject}">Email Subject</h5>
-                    <span th:class="|badge ${email.criticalityLevel == 'CRITICAL' ? 'bg-danger' : (email.criticalityLevel == 'HIGH' ? 'bg-warning text-dark' : 'bg-info text-dark')}|"
+                    <h5 class="mb-0" th:text="${email.subject != null ? email.subject : '(No subject)'}">Email Subject</h5>
+                    <span th:if="${email.criticalityLevel != null}"
+                          th:class="|badge ${email.criticalityLevel == 'CRITICAL' ? 'bg-danger' : (email.criticalityLevel == 'HIGH' ? 'bg-warning text-dark' : 'bg-info text-dark')}|"
                           th:text="${email.criticalityLevel}">LEVEL</span>
+                    <span th:if="${email.criticalityLevel == null}" class="badge bg-secondary">N/A</span>
                 </div>
                 <div class="card-body">
                     <div class="row mb-4">
                         <div class="col-sm-6">
                             <small class="text-muted d-block">Sender</small>
-                            <strong th:text="${email.sender}">Sender Name</strong>
+                            <strong th:text="${email.sender != null ? email.sender : '—'}">Sender Name</strong>
                         </div>
                         <div class="col-sm-3">
                             <small class="text-muted d-block">Email Date</small>
-                            <span th:text="${#temporals.format(email.emailDate, 'yyyy-MM-dd HH:mm')}">Date</span>
+                            <span th:text="${email.emailDate != null ? #temporals.format(email.emailDate, 'yyyy-MM-dd HH:mm') : '—'}">Date</span>
                         </div>
                         <div class="col-sm-3">
                             <small class="text-muted d-block">Confidence</small>
-                            <span class="badge bg-light text-dark" th:text="${email.confidence + '%'}">90%</span>
+                            <span class="badge bg-light text-dark"
+                                  th:text="${email.confidence != null ? email.confidence + '%' : 'N/A'}">90%</span>
                         </div>
                     </div>
 
                     <h6 class="border-bottom pb-2">Summary</h6>
-                    <p class="mb-4" th:text="${email.summary}">Summary text goes here...</p>
+                    <p class="mb-4" th:text="${email.summary != null ? email.summary : '—'}">Summary text goes here...</p>
 
                     <h6 class="border-bottom pb-2">Key Risks</h6>
                     <div class="mb-4">
-                        <span th:each="risk : ${email.keyRisks}"
-                              class="badge bg-light text-danger border border-danger me-1 mb-1"
-                              th:text="${risk}">Risk</span>
+                        <span th:if="${email.keyRisks == null || email.keyRisks.isEmpty()}" class="text-muted small">None listed</span>
+                        <th:block th:if="${email.keyRisks != null && !email.keyRisks.isEmpty()}">
+                            <span th:each="risk : ${email.keyRisks}"
+                                  class="badge bg-light text-danger border border-danger me-1 mb-1"
+                                  th:text="${risk}">Risk</span>
+                        </th:block>
                     </div>
 
                     <h6 class="border-bottom pb-2">Affected Stakeholders</h6>
                     <div class="mb-4">
-                        <span th:each="stakeholder : ${email.affectedStakeholders}"
-                              class="badge bg-light text-primary border border-primary me-1 mb-1"
-                              th:text="${stakeholder}">Stakeholder</span>
+                        <span th:if="${email.affectedStakeholders == null || email.affectedStakeholders.isEmpty()}" class="text-muted small">None listed</span>
+                        <th:block th:if="${email.affectedStakeholders != null && !email.affectedStakeholders.isEmpty()}">
+                            <span th:each="stakeholder : ${email.affectedStakeholders}"
+                                  class="badge bg-light text-primary border border-primary me-1 mb-1"
+                                  th:text="${stakeholder}">Stakeholder</span>
+                        </th:block>
                     </div>
 
                     <div th:if="${email.actionNeeded}" class="alert alert-warning border-warning">
@@ -76,53 +85,59 @@
                 </div>
                 <div class="card-body">
                     <div class="text-center mb-4">
-                        <h1 class="display-4" th:text="${email.criticalityScore}">92</h1>
+                        <h1 class="display-4" th:text="${email.criticalityScore != null ? email.criticalityScore : '—'}">92</h1>
                         <span class="text-muted">Total Score</span>
                     </div>
 
+                    <div th:if="${email.breakdown == null}" class="text-muted small mb-0">
+                        No criticality breakdown available for this email.
+                    </div>
+
+                    <th:block th:if="${email.breakdown != null}">
                     <div class="mb-3">
                         <div class="d-flex justify-content-between mb-1">
                             <small>Business Priority</small>
-                            <small th:text="${email.breakdown.businessPriority + '/40'}">37/40</small>
+                            <small th:text="${email.breakdown.businessPriority != null ? email.breakdown.businessPriority + '/40' : 'N/A'}">37/40</small>
                         </div>
                         <div class="progress" style="height: 10px;">
                             <div class="progress-bar bg-primary" role="progressbar"
-                                 th:style="'width: ' + (${email.breakdown.businessPriority} * 100 / 40) + '%'"></div>
+                                 th:style="'width: ' + (${email.breakdown.businessPriority != null ? email.breakdown.businessPriority : 0} * 100 / 40) + '%'"></div>
                         </div>
                     </div>
 
                     <div class="mb-3">
                         <div class="d-flex justify-content-between mb-1">
                             <small>Urgency</small>
-                            <small th:text="${email.breakdown.urgency + '/30'}">28/30</small>
+                            <small th:text="${email.breakdown.urgency != null ? email.breakdown.urgency + '/30' : 'N/A'}">28/30</small>
                         </div>
                         <div class="progress" style="height: 10px;">
                             <div class="progress-bar bg-warning" role="progressbar"
-                                 th:style="'width: ' + (${email.breakdown.urgency} * 100 / 30) + '%'"></div>
+                                 th:style="'width: ' + (${email.breakdown.urgency != null ? email.breakdown.urgency : 0} * 100 / 30) + '%'"></div>
                         </div>
                     </div>
 
                     <div class="mb-3">
                         <div class="d-flex justify-content-between mb-1">
                             <small>Action Required</small>
-                            <small th:text="${email.breakdown.actionRequired + '/20'}">19/20</small>
+                            <small th:text="${email.breakdown.actionRequired != null ? email.breakdown.actionRequired + '/20' : 'N/A'}">19/20</small>
                         </div>
                         <div class="progress" style="height: 10px;">
                             <div class="progress-bar bg-info" role="progressbar"
-                                 th:style="'width: ' + (${email.breakdown.actionRequired} * 100 / 20) + '%'"></div>
+                                 th:style="'width: ' + (${email.breakdown.actionRequired != null ? email.breakdown.actionRequired : 0} * 100 / 20) + '%'"></div>
                         </div>
                     </div>
 
                     <div class="mb-3">
                         <div class="d-flex justify-content-between mb-1">
                             <small>Financial Impact</small>
-                            <small th:text="${email.breakdown.financialImpact + '/10'}">8/10</small>
+                            <small th:text="${email.breakdown.financialImpact != null ? email.breakdown.financialImpact + '/10' : 'N/A'}">8/10</small>
                         </div>
                         <div class="progress" style="height: 10px;">
                             <div class="progress-bar bg-success" role="progressbar"
-                                 th:style="'width: ' + (${email.breakdown.financialImpact} * 100 / 10) + '%'"></div>
+                                 th:style="'width: ' + (${email.breakdown.financialImpact != null ? email.breakdown.financialImpact : 0} * 100 / 10) + '%'"></div>
                         </div>
                     </div>
+                    </th:block>
                 </div>
             </div>
 
@@ -131,7 +146,7 @@
                 <div class="card-body">
                     <p class="mb-1 small text-muted"><strong>ID:</strong> <span th:text="${email.emailId}">ID</span></p>
                     <p class="mb-0 small text-muted"><strong>Processed At:</strong> <span
-                            th:text="${#temporals.format(email.processedAt, 'yyyy-MM-dd HH:mm:ss')}">Processed</span>
+                            th:text="${email.processedAt != null ? #temporals.format(email.processedAt, 'yyyy-MM-dd HH:mm:ss') : '—'}">Processed</span>
                     </p>
                 </div>
             </div>

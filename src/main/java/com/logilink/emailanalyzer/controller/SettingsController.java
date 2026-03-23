@@ -7,6 +7,7 @@ import com.logilink.emailanalyzer.model.SettingsForm;
 import com.logilink.emailanalyzer.scheduler.EmailScheduler;
 import com.logilink.emailanalyzer.service.AppSettingsService;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -19,6 +20,7 @@ import java.util.Map;
 
 @Controller
 @RequestMapping("/settings")
+@PreAuthorize("hasRole('ADMIN')")
 public class SettingsController {
 
     private final AppSettingsService appSettingsService;

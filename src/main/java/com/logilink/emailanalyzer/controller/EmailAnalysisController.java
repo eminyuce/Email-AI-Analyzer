@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,6 +20,7 @@ import java.util.List;
 
 @Controller
 @RequestMapping("/emails")
+@PreAuthorize("hasRole('ADMIN')")
 public class EmailAnalysisController {
 
     private final EmailAnalysisService service;
@@ -51,10 +53,10 @@ public class EmailAnalysisController {
         return "email/list";
     }
 
-    @GetMapping("/{id}")
-    public String detail(@PathVariable String id, Model model) {
-        EmailAnalysis email = service.findById(id)
-                .orElseThrow(() -> new RuntimeException("Email not found: " + id));
+    @GetMapping("/{emailId}")
+    public String detail(@PathVariable String emailId, Model model) {
+        EmailAnalysis email = service.findById(emailId)
+                .orElseThrow(() -> new RuntimeException("Email not found: " + emailId));
         model.addAttribute("email", email);
         return "email/detail";
     }
