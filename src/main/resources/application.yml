@@ -18,7 +18,7 @@ spring:
 
   ai:
     ollama:
-      base-url: http://localhost:11434
+      base-url: ${SPRING_AI_OLLAMA_BASE_URL:http://localhost:11434}
       chat:
         model: llama3.2
         options:
