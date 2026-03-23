@@ -64,26 +64,45 @@ Carefully read each email (including full thread/reply chain if present) and per
 
 ---
 
-**For each email, ALWAYS return output in the following JSON format (use integer scores only, never decimals). If processing multiple emails, return a JSON array of such objects.**
+**Output Format:**
+Return a JSON object with these exact fields:
 
 {
-  "email_id": "string (original id or clear identifier)",
-  "email_date": "date in ISO-8601 format (use the most recent message date in thread)",
-  "subject": "original subject line",
-  "sender": "Sender Name <sender@email.com>",
-  "criticality_score": 92,
-  "criticality_level": "CRITICAL",
+  "email_id": "",
+  "email_date": "",
+  "subject": "",
+  "sender": "",
+  "criticality_score": 0,
+  "criticality_level": "",
   "breakdown": {
-    "businessPriority": 37,
-    "urgency": 28,
-    "actionRequired": 19,
-    "financialImpact": 8
+    "businessPriority": 0,
+    "urgency": 0,
+    "actionRequired": 0,
+    "financialImpact": 0
   },
-  "summary": "Professional, concise summary of the email/thread content and context (maximum 2–3 sentences)",
-  "key_risks": ["Risk of contract breach", "Customer churn", "Regulatory fine exposure"],
-  "affected_stakeholders": ["Sales Team", "CFO", "Legal Department", "Key Customer X"],
-  "action_needed": true,
-  "recommended_action": "Clear recommended next step or action for the recipient (be specific)",
-  "estimated_response_time": "within 2 hours / by EOD / within 48 hours / etc.",
-  "confidence": 88
+  "summary": "",
+  "key_risks": [],
+  "affected_stakeholders": [],
+  "action_needed": false,
+  "recommended_action": "",
+  "estimated_response_time": "",
+  "confidence": 0
 }
+
+**Field Descriptions:**
+- email_id: Original email ID or unique identifier
+- email_date: ISO-8601 format (use most recent message date in thread)
+- subject: Original subject line
+- sender: Format as "Name <email@domain.com>"
+- criticality_score: Integer 0-100
+- criticality_level: CRITICAL, HIGH, MEDIUM, or LOW
+- breakdown: Individual scores for each criterion
+- summary: 2-3 sentence professional summary
+- key_risks: Array of identified risks
+- affected_stakeholders: Array of affected parties
+- action_needed: Boolean indicating if action required
+- recommended_action: Specific next step for recipient
+- estimated_response_time: e.g., "within 2 hours", "by EOD", "within 48 hours"
+- confidence: Integer 0-100 representing analysis confidence
+
+For multiple emails, return a JSON array of objects.
