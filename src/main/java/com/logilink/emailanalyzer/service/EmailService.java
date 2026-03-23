@@ -95,6 +95,7 @@ public class EmailService {
         boolean preferImplicitSsl = shouldUseImplicitSsl(settings);
         try {
             messages.addAll(fetchMessages(settings, maxEmails, startDate, endDate, unreadOnly, preferImplicitSsl));
+            log.debug("Fetched {} emails from {} to {} with {} unread emails", messages.size(), startDate, endDate, unreadOnly ? "only" : "all");
         } catch (Exception firstException) {
             // Retry with STARTTLS when server rejects implicit SSL to avoid SSL handshake mismatch failures.
             if (preferImplicitSsl && isUnsupportedSslMessage(firstException)) {
@@ -102,6 +103,7 @@ public class EmailService {
                 messages.clear();
                 try {
                     messages.addAll(fetchMessages(settings, maxEmails, startDate, endDate, unreadOnly, false));
+                    log.debug("Fetched {} emails from {} to {} with {} unread emails", messages.size(), startDate, endDate, unreadOnly ? "only" : "all");
                 } catch (MessagingException retryException) {
                     throw new EmailAnalysisException("Failed to fetch emails within range", retryException);
                 }

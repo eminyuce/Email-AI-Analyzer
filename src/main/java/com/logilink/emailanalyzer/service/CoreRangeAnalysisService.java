@@ -47,13 +47,14 @@ public class CoreRangeAnalysisService {
         String defaultSystemPrompt = loadDefaultSystemPrompt();
         Date rangeStart = Date.from(startDate.atZone(ZoneId.systemDefault()).toInstant());
         Date rangeEnd = Date.from(endDate.atZone(ZoneId.systemDefault()).toInstant());
+        log.info("Starting core range analysis for {} emails from {} to {}", maxEmails, startDate, endDate);
 
         List<Message> messages = emailService.fetchEmailsByRange(maxEmails, rangeStart, rangeEnd);
         List<EmailAnalysisReportDto> reports = new ArrayList<>();
         List<String> errors = new ArrayList<>();
         int skippedCount = 0;
         int analyzedCount = 0;
-
+        log.info("Fetched {} emails from {} to {}", messages.size(), startDate, endDate);
         for (Message message : messages) {
             String emailId = "unknown";
             try {
@@ -70,6 +71,7 @@ public class CoreRangeAnalysisService {
                 String content = emailService.getTextFromMessage(message);
 
                 EmailAnalysisResult result = aiService.analyzeEmail(emailId, subject, sender, content, defaultSystemPrompt);
+                log.info("Core range analysis result for email {}: {}", emailId, result);
                 enrichResultFromMessage(result, message, emailId, subject, sender);
                 EmailAnalysis saved = emailAnalysisRepository.save(toEntity(result));
                 reports.add(emailAnalysisMapper.toReportDto(saved));
@@ -95,6 +97,7 @@ public class CoreRangeAnalysisService {
         response.setRangeEnd(endDate);
         response.setAnalyzedEmailReports(reports);
         response.setErrors(errors);
+        log.info("Core range analysis completed with {} analyzed emails, {} skipped emails, and {} errors", analyzedCount, skippedCount, errors.size());
         return response;
     }
 

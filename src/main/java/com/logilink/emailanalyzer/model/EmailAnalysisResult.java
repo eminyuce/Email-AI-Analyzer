@@ -5,6 +5,7 @@ import com.logilink.emailanalyzer.domain.Breakdown;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.ToString;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -12,6 +13,7 @@ import java.util.List;
 @Getter
 @Setter
 @NoArgsConstructor
+@ToString
 public class EmailAnalysisResult {
     @JsonProperty("email_id")
     private String emailId;
