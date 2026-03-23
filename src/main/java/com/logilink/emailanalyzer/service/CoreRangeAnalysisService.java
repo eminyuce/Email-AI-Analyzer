@@ -114,9 +114,7 @@ public class CoreRangeAnalysisService {
         if (result.getSender() == null || result.getSender().isBlank()) {
             result.setSender(sender);
         }
-        if (result.getEmailDate() == null) {
-            result.setEmailDate(email.getEmailDate());
-        }
+        result.resolveEmailDate(email.getEmailDate());
     }
 
     private EmailAnalysis toEntity(EmailAnalysisResult result) {

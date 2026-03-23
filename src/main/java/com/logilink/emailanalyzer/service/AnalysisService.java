@@ -112,11 +112,7 @@ public class AnalysisService {
                 log.info("Analyzing email from: {}", sender);
 
                 EmailAnalysisResult result = aiService.analyzeEmail(emailId, subject, sender, content);
-
-                // Ensure email date is set from the message if LLM doesn't provide it correctly
-                if (result.getEmailDate() == null) {
-                    result.setEmailDate(emailDate);
-                }
+                result.resolveEmailDate(emailDate);
 
                 // Save to DB
                 EmailAnalysis savedAnalysis = saveAnalysis(result);

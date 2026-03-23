@@ -1,7 +1,9 @@
 package com.logilink.emailanalyzer.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.logilink.emailanalyzer.domain.Breakdown;
+import com.logilink.emailanalyzer.util.EmailDateParser;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -18,8 +20,23 @@ public class EmailAnalysisResult {
     @JsonProperty("email_id")
     private String emailId;
 
+    /**
+     * Raw value from model JSON. Kept as string so Spring AI's BeanOutputConverter does not require
+     * a JSR-310-enabled ObjectMapper and arbitrary LLM date text still deserializes.
+     */
     @JsonProperty("email_date")
+    private String emailDateRaw;
+
+    @JsonIgnore
     private LocalDateTime emailDate;
+
+    /**
+     * Sets {@link #emailDate} from parsed {@link #emailDateRaw} when possible, otherwise from the message.
+     */
+    public void resolveEmailDate(LocalDateTime fallbackFromMessage) {
+        LocalDateTime parsed = EmailDateParser.parseLlmEmailDate(this.emailDateRaw);
+        this.emailDate = parsed != null ? parsed : fallbackFromMessage;
+    }
 
     @JsonProperty("subject")
     private String subject;
