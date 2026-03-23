@@ -44,7 +44,6 @@ public class CoreRangeAnalysisService {
     }
 
     public CoreRangeAnalysisResponse analyzeByDateRange(LocalDateTime startDate, LocalDateTime endDate, int maxEmails) {
-        String defaultSystemPrompt = loadDefaultSystemPrompt();
         Date rangeStart = Date.from(startDate.atZone(ZoneId.systemDefault()).toInstant());
         Date rangeEnd = Date.from(endDate.atZone(ZoneId.systemDefault()).toInstant());
         log.info("Starting core range analysis for {} emails from {} to {}", maxEmails, startDate, endDate);
@@ -68,7 +67,7 @@ public class CoreRangeAnalysisService {
                 String sender = email.getSender() != null ? email.getSender() : "";
                 String content = email.getContent() != null ? email.getContent() : "";
 
-                EmailAnalysisResult result = aiService.analyzeEmail(emailId, subject, sender, content, defaultSystemPrompt);
+                EmailAnalysisResult result = aiService.analyzeEmail(emailId, subject, sender, content);
                 log.info("Core range analysis result for email {}: {}", emailId, result);
                 enrichResultFromFetchedEmail(result, email, emailId, subject, sender);
                 EmailAnalysis saved = emailAnalysisRepository.save(toEntity(result));
