@@ -15,6 +15,8 @@ import com.logilink.emailanalyzer.model.FetchEmailSubjectsResponse;
 import com.logilink.emailanalyzer.model.SchedulerControlResponse;
 import com.logilink.emailanalyzer.model.SettingsSaveResponse;
 import com.logilink.emailanalyzer.model.SettingsForm;
+import com.logilink.emailanalyzer.model.SystemPromptUpdateRequest;
+import com.logilink.emailanalyzer.model.SystemPromptUpdateResponse;
 import com.logilink.emailanalyzer.scheduler.EmailScheduler;
 import com.logilink.emailanalyzer.service.AIService;
 import com.logilink.emailanalyzer.service.AnalysisService;
@@ -137,6 +139,37 @@ public class SettingsController {
         response.setSchedulerRunning(emailScheduler.isRunning());
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * Test-only: updates {@code system_prompt} on the first {@code app_settings} row (singleton id = 1).
+     * Other columns are unchanged; scheduler is not started or stopped.
+     */
+    @PostMapping(path = "/api/core-test/system-prompt", consumes = "application/json", produces = "application/json")
+    @ResponseBody
+    public ResponseEntity<SystemPromptUpdateResponse> updateSystemPromptTest(
+            @RequestBody SystemPromptUpdateRequest request
+    ) {
+        SystemPromptUpdateResponse response = new SystemPromptUpdateResponse();
+        if (request == null) {
+            response.setSuccess(false);
+            response.setMessage("Request body is required.");
+            return ResponseEntity.badRequest().body(response);
+        }
+        try {
+            AppSettings updated = appSettingsService.updateSingletonSystemPrompt(request.systemPrompt());
+            String stored = updated.getSystemPrompt();
+            response.setSuccess(true);
+            response.setMessage("system_prompt updated for app_settings id " + AppSettings.SINGLETON_ID + ".");
+            response.setSettingsId(updated.getId());
+            response.setSystemPromptLength(stored != null ? stored.length() : 0);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            response.setSuccess(false);
+            response.setMessage("Failed to update system_prompt: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
     /**
      * Runs the end-to-end core flow with default host/user values and a caller-provided
      * model/password/date range. Intended for integration verification of fetch + AI analysis together.
