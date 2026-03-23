@@ -165,6 +165,18 @@ public class EmailService {
                 fetchProfile.add(FetchProfile.Item.ENVELOPE);
                 fetchProfile.add(FetchProfile.Item.CONTENT_INFO);
                 emailFolder.fetch(messages.toArray(new Message[0]), fetchProfile);
+                // Folder and store are closed in finally; IMAP Message bodies load lazily and throw
+                // FolderClosedException after close. Copy each message into memory while still open.
+                List<Message> detached = new ArrayList<>(messages.size());
+                for (Message msg : messages) {
+                    if (msg instanceof MimeMessage mimeMessage) {
+                        detached.add(new MimeMessage(mimeMessage));
+                    } else {
+                        throw new MessagingException(
+                            "Expected MimeMessage from store, got " + msg.getClass().getName());
+                    }
+                }
+                messages = detached;
             }
             return messages;
         } finally {
