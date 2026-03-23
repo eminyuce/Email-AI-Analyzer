@@ -247,17 +247,6 @@ public class AppSettingsService {
         repository.save(settings);
     }
 
-    /**
-     * Updates only {@link AppSettings#getSystemPrompt()} for the singleton settings row (id = 1).
-     * Blank input is stored as {@code null}. Does not touch scheduler or other fields.
-     */
-    @Transactional
-    public AppSettings updateSingletonSystemPrompt(String systemPrompt) {
-        AppSettings settings = getOrCreate();
-        settings.setSystemPrompt(trim(systemPrompt));
-        return repository.save(settings);
-    }
-
     @Transactional(readOnly = true)
     public String getSchedulerCronOrDefault() {
         String cron = getOrCreate().getSchedulerCron();

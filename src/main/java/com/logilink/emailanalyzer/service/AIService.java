@@ -56,31 +56,6 @@ public class AIService {
         }
     }
 
-    public String testModelResponse(String prompt) {
-        String effectivePrompt = (prompt == null || prompt.isBlank())
-                ? "Reply with exactly: OLLAMA_TEST_OK"
-                : prompt;
-
-        try {
-            AppSettings settings = appSettingsService.getOrCreate();
-            ChatClient chatClient = buildChatClient(settings);
-
-            String response = chatClient.prompt()
-                    .system("You are an AI health-check assistant. Follow the user's instruction exactly.")
-                    .user(effectivePrompt)
-                    .call()
-                    .content();
-
-            if (response == null) {
-                throw new EmailAnalysisException("AI service returned an empty response body.");
-            }
-            return response.trim();
-        } catch (Exception e) {
-            log.error("AI model test request failed: {}", e.getMessage());
-            throw new EmailAnalysisException("AI model test failed", e);
-        }
-    }
-
     private ChatClient buildChatClient(AppSettings settings) {
         Float temperature = settings.getLlmTemperature() == null
                 ? 0.3f
