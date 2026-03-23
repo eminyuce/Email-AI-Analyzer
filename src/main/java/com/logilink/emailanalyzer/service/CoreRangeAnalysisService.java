@@ -6,8 +6,8 @@ import com.logilink.emailanalyzer.mapper.EmailAnalysisMapper;
 import com.logilink.emailanalyzer.model.CoreRangeAnalysisResponse;
 import com.logilink.emailanalyzer.model.EmailAnalysisReportDto;
 import com.logilink.emailanalyzer.model.EmailAnalysisResult;
+import com.logilink.emailanalyzer.model.FetchedEmailDto;
 import com.logilink.emailanalyzer.repository.EmailAnalysisRepository;
-import jakarta.mail.Message;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
@@ -49,30 +49,28 @@ public class CoreRangeAnalysisService {
         Date rangeEnd = Date.from(endDate.atZone(ZoneId.systemDefault()).toInstant());
         log.info("Starting core range analysis for {} emails from {} to {}", maxEmails, startDate, endDate);
 
-        List<Message> messages = emailService.fetchEmailsByRange(maxEmails, rangeStart, rangeEnd);
+        List<FetchedEmailDto> emails = emailService.fetchEmailsByRange(maxEmails, rangeStart, rangeEnd);
         List<EmailAnalysisReportDto> reports = new ArrayList<>();
         List<String> errors = new ArrayList<>();
         int skippedCount = 0;
         int analyzedCount = 0;
-        log.info("Fetched {} emails from {} to {}", messages.size(), startDate, endDate);
-        for (Message message : messages) {
+        log.info("Fetched {} emails from {} to {}", emails.size(), startDate, endDate);
+        for (FetchedEmailDto email : emails) {
             String emailId = "unknown";
             try {
-                emailId = emailService.getEmailId(message);
+                emailId = email.getEmailId();
                 if (emailAnalysisRepository.existsById(emailId)) {
                     skippedCount++;
                     continue;
                 }
 
-                String subject = message.getSubject();
-                String sender = message.getFrom() != null && message.getFrom().length > 0
-                        ? message.getFrom()[0].toString()
-                        : "";
-                String content = emailService.getTextFromMessage(message);
+                String subject = email.getSubject();
+                String sender = email.getSender() != null ? email.getSender() : "";
+                String content = email.getContent() != null ? email.getContent() : "";
 
                 EmailAnalysisResult result = aiService.analyzeEmail(emailId, subject, sender, content, defaultSystemPrompt);
                 log.info("Core range analysis result for email {}: {}", emailId, result);
-                enrichResultFromMessage(result, message, emailId, subject, sender);
+                enrichResultFromFetchedEmail(result, email, emailId, subject, sender);
                 EmailAnalysis saved = emailAnalysisRepository.save(toEntity(result));
                 reports.add(emailAnalysisMapper.toReportDto(saved));
                 analyzedCount++;
@@ -89,7 +87,7 @@ public class CoreRangeAnalysisService {
                 : "End-to-end date-range analysis completed with some failures.");
         response.setSystemPromptPath(AppConstants.Defaults.DEFAULT_SYSTEM_PROMPT_PATH);
         response.setRequestedMaxEmails(maxEmails);
-        response.setFetchedEmailCount(messages.size());
+        response.setFetchedEmailCount(emails.size());
         response.setAnalyzedEmailCount(analyzedCount);
         response.setSavedEmailCount(reports.size());
         response.setSkippedEmailCount(skippedCount);
@@ -101,9 +99,9 @@ public class CoreRangeAnalysisService {
         return response;
     }
 
-    private void enrichResultFromMessage(
+    private void enrichResultFromFetchedEmail(
             EmailAnalysisResult result,
-            Message message,
+            FetchedEmailDto email,
             String emailId,
             String subject,
             String sender
@@ -118,24 +116,8 @@ public class CoreRangeAnalysisService {
             result.setSender(sender);
         }
         if (result.getEmailDate() == null) {
-            result.setEmailDate(extractMessageDate(message));
+            result.setEmailDate(email.getEmailDate());
         }
-    }
-
-    private LocalDateTime extractMessageDate(Message message) {
-        try {
-            Date sentDate = message.getSentDate();
-            if (sentDate != null) {
-                return sentDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
-            }
-            Date receivedDate = message.getReceivedDate();
-            if (receivedDate != null) {
-                return receivedDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
-            }
-        } catch (Exception e) {
-            log.warn("Failed to extract message date: {}", e.getMessage());
-        }
-        return null;
     }
 
     private EmailAnalysis toEntity(EmailAnalysisResult result) {

@@ -3,6 +3,7 @@ package com.logilink.emailanalyzer.service;
 import com.logilink.emailanalyzer.common.MailStoreProtocol;
 import com.logilink.emailanalyzer.domain.AppSettings;
 import com.logilink.emailanalyzer.exception.EmailAnalysisException;
+import com.logilink.emailanalyzer.model.FetchedEmailDto;
 import jakarta.mail.*;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
@@ -18,6 +19,8 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Date;
@@ -51,7 +54,7 @@ public class EmailService {
         this.imapSslTrust = imapSslTrust;
     }
 
-    public List<Message> fetchUnreadEmails(int maxEmails) {
+    public List<FetchedEmailDto> fetchUnreadEmails(int maxEmails) {
         if (maxEmails <= 0) {
             return List.of();
         }
@@ -62,11 +65,11 @@ public class EmailService {
         return fetchUnreadEmailsByRange(maxEmails, startDate, endDate);
     }
 
-    public List<Message> fetchUnreadEmailsByRange(int maxEmails, Date startDate, Date endDate) {
+    public List<FetchedEmailDto> fetchUnreadEmailsByRange(int maxEmails, Date startDate, Date endDate) {
         return fetchEmailsByRange(maxEmails, startDate, endDate, true);
     }
 
-    public List<Message> fetchEmails(int maxEmails) {
+    public List<FetchedEmailDto> fetchEmails(int maxEmails) {
         if (maxEmails <= 0) {
             return List.of();
         }
@@ -77,11 +80,11 @@ public class EmailService {
         return fetchEmailsByRange(maxEmails, startDate, endDate, false);
     }
 
-    public List<Message> fetchEmailsByRange(int maxEmails, Date startDate, Date endDate) {
+    public List<FetchedEmailDto> fetchEmailsByRange(int maxEmails, Date startDate, Date endDate) {
         return fetchEmailsByRange(maxEmails, startDate, endDate, false);
     }
 
-    public List<Message> fetchEmailsByRange(int maxEmails, Date startDate, Date endDate, boolean unreadOnly) {
+    public List<FetchedEmailDto> fetchEmailsByRange(int maxEmails, Date startDate, Date endDate, boolean unreadOnly) {
         if (maxEmails <= 0) {
             return List.of();
         }
@@ -90,20 +93,20 @@ public class EmailService {
         }
 
         AppSettings settings = appSettingsService.getRequiredMailSettings();
-        List<Message> messages = new ArrayList<>();
+        List<FetchedEmailDto> emails = new ArrayList<>();
 
         boolean preferImplicitSsl = shouldUseImplicitSsl(settings);
         try {
-            messages.addAll(fetchMessages(settings, maxEmails, startDate, endDate, unreadOnly, preferImplicitSsl));
-            log.debug("Fetched {} emails from {} to {} with {} unread emails", messages.size(), startDate, endDate, unreadOnly ? "only" : "all");
+            emails.addAll(fetchMessages(settings, maxEmails, startDate, endDate, unreadOnly, preferImplicitSsl));
+            log.debug("Fetched {} emails from {} to {} with {} unread emails", emails.size(), startDate, endDate, unreadOnly ? "only" : "all");
         } catch (Exception firstException) {
             // Retry with STARTTLS when server rejects implicit SSL to avoid SSL handshake mismatch failures.
             if (preferImplicitSsl && isUnsupportedSslMessage(firstException)) {
                 log.warn("IMAPS handshake failed; retrying mailbox fetch with IMAP STARTTLS.");
-                messages.clear();
+                emails.clear();
                 try {
-                    messages.addAll(fetchMessages(settings, maxEmails, startDate, endDate, unreadOnly, false));
-                    log.debug("Fetched {} emails from {} to {} with {} unread emails", messages.size(), startDate, endDate, unreadOnly ? "only" : "all");
+                    emails.addAll(fetchMessages(settings, maxEmails, startDate, endDate, unreadOnly, false));
+                    log.debug("Fetched {} emails from {} to {} with {} unread emails", emails.size(), startDate, endDate, unreadOnly ? "only" : "all");
                 } catch (MessagingException retryException) {
                     throw new EmailAnalysisException("Failed to fetch emails within range", retryException);
                 }
@@ -112,10 +115,10 @@ public class EmailService {
                 throw new EmailAnalysisException("Failed to fetch emails within range", firstException);
             }
         }
-        return messages;
+        return emails;
     }
 
-    private List<Message> fetchMessages(
+    private List<FetchedEmailDto> fetchMessages(
         AppSettings settings,
         int maxEmails,
         Date startDate,
@@ -129,7 +132,7 @@ public class EmailService {
 
         Store store = null;
         Folder emailFolder = null;
-        List<Message> messages = new ArrayList<>();
+        List<Message> folderMessages = new ArrayList<>();
         try {
             store = emailSession.getStore(protocol.value());
             store.connect(settings.getMailHost(), settings.getMailPort(), settings.getMailUsername(), settings.getMailPassword());
@@ -156,17 +159,19 @@ public class EmailService {
 
             int count = 0;
             for (int i = foundMessages.length - 1; i >= 0 && count < maxEmails; i--) {
-                messages.add(foundMessages[i]);
+                folderMessages.add(foundMessages[i]);
                 count++;
             }
 
-            if (!messages.isEmpty()) {
-                FetchProfile fetchProfile = new FetchProfile();
-                fetchProfile.add(FetchProfile.Item.ENVELOPE);
-                fetchProfile.add(FetchProfile.Item.CONTENT_INFO);
-                emailFolder.fetch(messages.toArray(new Message[0]), fetchProfile);
+            if (folderMessages.isEmpty()) {
+                return List.of();
             }
-            return messages;
+            FetchProfile fetchProfile = new FetchProfile();
+            fetchProfile.add(FetchProfile.Item.ENVELOPE);
+            fetchProfile.add(FetchProfile.Item.CONTENT_INFO);
+            emailFolder.fetch(folderMessages.toArray(new Message[0]), fetchProfile);
+            // Jakarta Mail Message instances are invalid after the folder closes; snapshot fields now.
+            return materializeToDtos(folderMessages);
         } finally {
             if (emailFolder != null && emailFolder.isOpen()) {
                 try {
@@ -183,6 +188,54 @@ public class EmailService {
                 }
             }
         }
+    }
+
+    private List<FetchedEmailDto> materializeToDtos(List<Message> connected) {
+        List<FetchedEmailDto> out = new ArrayList<>(connected.size());
+        for (Message message : connected) {
+            try {
+                out.add(toFetchedEmailDto(message));
+            } catch (Exception e) {
+                log.warn("Skipping email that could not be read while IMAP folder was open: {}", e.getMessage());
+            }
+        }
+        return out;
+    }
+
+    private FetchedEmailDto toFetchedEmailDto(Message message) throws MessagingException, IOException {
+        String emailId = getEmailId(message);
+        String subject = message.getSubject();
+        String sender = "";
+        if (message.getFrom() != null && message.getFrom().length > 0 && message.getFrom()[0] != null) {
+            sender = message.getFrom()[0].toString();
+        }
+        String content = getTextFromMessage(message);
+        Date received = message.getReceivedDate();
+        Instant receivedAt = received != null ? received.toInstant() : null;
+        return FetchedEmailDto.builder()
+            .emailId(emailId)
+            .subject(subject)
+            .sender(sender)
+            .content(content != null ? content : "")
+            .emailDate(resolveEmailDate(message))
+            .receivedAt(receivedAt)
+            .build();
+    }
+
+    private LocalDateTime resolveEmailDate(Message message) {
+        try {
+            Date sent = message.getSentDate();
+            if (sent != null) {
+                return sent.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+            }
+            Date received = message.getReceivedDate();
+            if (received != null) {
+                return received.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to extract message date: {}", e.getMessage());
+        }
+        return null;
     }
 
     private Properties buildMailProperties(AppSettings settings, String protocol, boolean useImplicitSsl) {
@@ -223,7 +276,7 @@ public class EmailService {
         return throwable.getCause() != null && isUnsupportedSslMessage(throwable.getCause());
     }
 
-    public String getEmailId(Message message) throws MessagingException {
+    private String getEmailId(Message message) throws MessagingException {
         if (message instanceof MimeMessage) {
             String messageId = ((MimeMessage) message).getMessageID();
             if (messageId != null && !messageId.isBlank()) {
@@ -233,7 +286,7 @@ public class EmailService {
         return "MSG-" + message.getMessageNumber();
     }
 
-    public String getTextFromMessage(Message message) throws MessagingException, IOException {
+    private String getTextFromMessage(Message message) throws MessagingException, IOException {
         String result = "";
         if (message.isMimeType("text/plain")) {
             result = message.getContent().toString();

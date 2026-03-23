@@ -10,6 +10,7 @@ import com.logilink.emailanalyzer.model.ConnectionTestResponse;
 import com.logilink.emailanalyzer.model.DefaultSettingsTestResponse;
 import com.logilink.emailanalyzer.model.EmailAnalysisReportDto;
 import com.logilink.emailanalyzer.model.EmailSubjectDto;
+import com.logilink.emailanalyzer.model.FetchedEmailDto;
 import com.logilink.emailanalyzer.model.FetchEmailSubjectsResponse;
 import com.logilink.emailanalyzer.model.SchedulerControlResponse;
 import com.logilink.emailanalyzer.model.SettingsSaveResponse;
@@ -19,8 +20,6 @@ import com.logilink.emailanalyzer.service.AIService;
 import com.logilink.emailanalyzer.service.AnalysisService;
 import com.logilink.emailanalyzer.service.AppSettingsService;
 import com.logilink.emailanalyzer.service.EmailService;
-import jakarta.mail.Message;
-import jakarta.mail.MessagingException;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -309,14 +308,14 @@ public class SettingsController {
 
             Date rangeStart = Date.from(effectiveStartDate.atZone(ZoneId.systemDefault()).toInstant());
             Date rangeEnd = Date.from(effectiveEndDate.atZone(ZoneId.systemDefault()).toInstant());
-            List<Message> messages = emailService.fetchEmailsByRange(effectiveMaxEmails, rangeStart, rangeEnd);
+            List<FetchedEmailDto> fetched = emailService.fetchEmailsByRange(effectiveMaxEmails, rangeStart, rangeEnd);
 
             List<EmailSubjectDto> subjects = new ArrayList<>();
-            for (Message message : messages) {
+            for (FetchedEmailDto email : fetched) {
                 subjects.add(new EmailSubjectDto(
-                        safeSubject(message),
-                        message.getReceivedDate() != null ? message.getReceivedDate().toInstant().toString() : "",
-                        safeFrom(message)
+                        displaySubject(email.getSubject()),
+                        email.getReceivedAt() != null ? email.getReceivedAt().toString() : "",
+                        email.getSender() != null ? email.getSender() : ""
                 ));
             }
 
@@ -386,25 +385,8 @@ public class SettingsController {
         return result;
     }
 
-    private String safeSubject(Message message) {
-        try {
-            String subject = message.getSubject();
-            return subject == null || subject.isBlank() ? "(no subject)" : subject;
-        } catch (MessagingException e) {
-            return "(subject unavailable)";
-        }
-    }
-
-    private String safeFrom(Message message) {
-        try {
-            var from = message.getFrom();
-            if (from == null || from.length == 0 || from[0] == null) {
-                return "";
-            }
-            return from[0].toString();
-        } catch (MessagingException e) {
-            return "";
-        }
+    private static String displaySubject(String subject) {
+        return subject == null || subject.isBlank() ? "(no subject)" : subject;
     }
 
     private ConnectionTestResponse toConnectionTestResponse(AppSettingsService.TestEndpointResult result) {

@@ -3,20 +3,17 @@ package com.logilink.emailanalyzer.service;
 import com.logilink.emailanalyzer.common.AppConstants;
 import com.logilink.emailanalyzer.domain.EmailAnalysis;
 import com.logilink.emailanalyzer.model.EmailAnalysisResult;
+import com.logilink.emailanalyzer.model.FetchedEmailDto;
 import com.logilink.emailanalyzer.repository.EmailAnalysisRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
-import jakarta.mail.Message;
-import jakarta.mail.MessagingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
-import java.io.IOException;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.Date;
 import java.util.List;
 import java.util.function.Supplier;
@@ -54,8 +51,8 @@ public class AnalysisService {
       if (maxEmails <= 0) {
         return List.of();
       }
-      List<Message> messages = emailService.fetchEmails(maxEmails);
-      return processMessages(messages);
+      List<FetchedEmailDto> emails = emailService.fetchEmails(maxEmails);
+      return processMessages(emails);
     });
   }
 
@@ -65,8 +62,8 @@ public class AnalysisService {
       if (maxEmails <= 0) {
         return List.of();
       }
-      List<Message> messages = emailService.fetchEmailsByRange(maxEmails, startDate, endDate);
-      return processMessages(messages);
+      List<FetchedEmailDto> emails = emailService.fetchEmailsByRange(maxEmails, startDate, endDate);
+      return processMessages(emails);
     });
   }
 
@@ -92,13 +89,13 @@ public class AnalysisService {
     }
   }
 
-    private List<EmailAnalysis> processMessages(List<Message> messages) {
-        log.info("Found {} emails to analyze.", messages.size());
+    private List<EmailAnalysis> processMessages(List<FetchedEmailDto> emails) {
+        log.info("Found {} emails to analyze.", emails.size());
         List<EmailAnalysis> processedAnalyses = new ArrayList<>();
 
-        for (Message message : messages) {
+        for (FetchedEmailDto email : emails) {
             try {
-                String emailId = emailService.getEmailId(message);
+                String emailId = email.getEmailId();
 
                 // Idempotency check
                 if (repository.existsById(emailId)) {
@@ -106,13 +103,11 @@ public class AnalysisService {
                     continue;
                 }
 
-                String subject = message.getSubject();
-                String sender = message.getFrom()[0].toString();
-                String content = emailService.getTextFromMessage(message);
+                String subject = email.getSubject();
+                String sender = email.getSender() != null ? email.getSender() : "";
+                String content = email.getContent() != null ? email.getContent() : "";
 
-                LocalDateTime emailDate = message.getSentDate().toInstant()
-                        .atZone(ZoneId.systemDefault())
-                        .toLocalDateTime();
+                LocalDateTime emailDate = email.getEmailDate();
 
                 log.info("Analyzing email from: {}", sender);
 
@@ -129,8 +124,6 @@ public class AnalysisService {
 
                 log.info("Analysis Complete for email {}: Score {}", emailId, result.getCriticalityScore());
 
-            } catch (MessagingException | IOException e) {
-                log.error("Failed to process message: {}", e.getMessage());
             } catch (Exception e) {
                 log.error("Analysis error for an email: {}", e.getMessage());
             }
