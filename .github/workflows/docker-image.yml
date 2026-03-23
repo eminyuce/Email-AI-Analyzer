@@ -3,8 +3,6 @@ name: Docker CI/CD
 on:
   push:
     branches: [ "master" ]
-    tags:
-      - 'v*'          # Trigger also on version tags (v1.0.0, v1.2.3-beta, etc.)
 
 jobs:
   build-deploy:
@@ -28,42 +26,6 @@ jobs:
 
       - name: Build with Maven
         run: mvn clean package -DskipTests
-
-      # ────────────────────────────────────────────────────────────────
-      # Prepare all Docker tags we want to push
-      # ────────────────────────────────────────────────────────────────
-      - name: Prepare Docker tags
-        id: prepare
-        run: |
-          # Always available
-          SHORT_SHA=$(git rev-parse --short HEAD)
-          IMAGE_PREFIX="${DOCKER_REPO}/${IMAGE_NAME}"
-
-          # Start with immutable sha tag + latest
-          TAGS="${IMAGE_PREFIX}:${SHORT_SHA},${IMAGE_PREFIX}:latest"
-
-          # If this is a tagged release (v1.0.0, v2.3.1, etc.)
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            VERSION=${GITHUB_REF#refs/tags/v}          # remove 'v' prefix
-            TAGS="${TAGS},${IMAGE_PREFIX}:${VERSION}"
-            # Optional: also push without 'v' prefix if you prefer both
-            # TAGS="${TAGS},${IMAGE_PREFIX}:v${VERSION}"
-          fi
-
-          # Optional: also extract semantic version from pom.xml every time
-          # (uncomment if you want SNAPSHOT or dev versions visible too)
-          # POM_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          # CLEAN_VERSION=$(echo "$POM_VERSION" | sed 's/-SNAPSHOT//g' | tr -d '[:space:]')
-          # if [[ "$CLEAN_VERSION" != "" && "$CLEAN_VERSION" != "unknown" ]]; then
-          #   TAGS="${TAGS},${IMAGE_PREFIX}:${CLEAN_VERSION}"
-          #   if [[ "$POM_VERSION" == *SNAPSHOT* ]]; then
-          #     TAGS="${TAGS},${IMAGE_PREFIX}:${CLEAN_VERSION}-SNAPSHOT"
-          #   fi
-          # fi
-
-          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
-          # Still use :latest for the deployment step below
-          echo "deploy_image=${IMAGE_PREFIX}:latest" >> "$GITHUB_OUTPUT"
 
       # ────────────────────────────────────────────────────────────────
       # Login & Build+Push (using modern official actions)
