@@ -9,13 +9,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME: email-ai-analyzer
-      DOCKER_REPO: guvenulu              # ← change this if your Docker Hub username/org is different
 
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0   # needed for git tag & describe if you want to use it
 
       - name: Set up JDK 24 (Amazon Corretto)
         uses: actions/setup-java@v4
@@ -27,32 +24,46 @@ jobs:
       - name: Build with Maven
         run: mvn clean package -DskipTests
 
-      # ────────────────────────────────────────────────────────────────
-      # Login & Build+Push (using modern official actions)
-      # ────────────────────────────────────────────────────────────────
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build and push Docker image (multi-tag)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.prepare.outputs.tags }}
-          # Optional: add these for better caching & security
-          # cache-from: type=gha
-          # cache-to: type=gha,mode=max
-
-
-      # Optional: if you want to deploy a specific version when tagging a release
-      - name: Notify or deploy tagged release (manual step reminder)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Build Docker image
+        run: docker build -t email-ai-analyzer:latest .
+      - name: Validate Docker Hub secrets and prepare image tag
+        id: prepare
         run: |
-          echo "New release tagged: ${{ github.ref_name }}"
-          echo "Image is available as:"
-          echo "  ${DOCKER_REPO}/${IMAGE_NAME}:${{ github.ref_name }}"
-          echo "  ${DOCKER_REPO}/${IMAGE_NAME}:latest (also updated)"
-          # You can add another SSH deployment here if you want auto-deploy on tag
+          if [ -z "${{ secrets.DOCKER_USERNAME }}" ]; then
+            echo "DOCKER_USERNAME secret is empty or missing."
+            exit 1
+          fi
+          if [ -z "${{ secrets.DOCKER_PASSWORD }}" ]; then
+            echo "DOCKER_PASSWORD secret is empty or missing."
+            exit 1
+          fi
+          DOCKER_USER_LOWER=$(echo "${{ secrets.DOCKER_USERNAME }}" | tr '[:upper:]' '[:lower:]')
+          echo "docker_image=${DOCKER_USER_LOWER}/${IMAGE_NAME}:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Login to Docker Hub
+        run: echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Tag Docker image for Docker Hub
+        run: docker tag email-ai-analyzer:latest ${{ secrets.DOCKER_USERNAME }}/email-ai-analyzer:latest
+      - name: Build Docker image
+        run: docker build -t "${{ steps.prepare.outputs.docker_image }}" .
+
+      - name: Push Docker image to Docker Hub
+        run: docker push ${{ secrets.DOCKER_USERNAME }}/email-ai-analyzer:latest
+        run: docker push "${{ steps.prepare.outputs.docker_image }}"
+
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            docker pull ${{ secrets.DOCKER_USERNAME }}/email-ai-analyzer:latest
+            docker pull ${{ steps.prepare.outputs.docker_image }}
+            docker stop email-ai-analyzer || true
+            docker rm email-ai-analyzer || true
+            docker run -d --restart always -p 8080:8080 --name email-ai-analyzer ${{ secrets.DOCKER_USERNAME }}/email-ai-analyzer:latest
+            docker run -d --restart always -p 8080:8080 --name email-ai-analyzer ${{ steps.prepare.outputs.docker_image }}
+
