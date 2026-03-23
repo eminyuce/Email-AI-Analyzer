@@ -53,7 +53,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus,httpexchanges
+        include: "*"
   endpoint:
     health:
       show-details: always
@@ -83,8 +83,3 @@ info:
     enabled: true
   env:
     enabled: true
-
-actuator:
-  security:
-    username: ${ACTUATOR_ADMIN_USERNAME:actuator-admin}
-    password: ${ACTUATOR_ADMIN_PASSWORD:change-me}
