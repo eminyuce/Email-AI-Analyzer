@@ -34,7 +34,7 @@ public class AIService {
             String systemPrompt = StringUtils.isNotBlank(systemPromptOverride)
                     ? systemPromptOverride
                     : settings.getSystemPrompt();
-
+            log.debug("AI system prompt: {}", systemPrompt);
             String userPrompt = String.format("""
                     Email ID: %s
                     Subject: %s
@@ -42,12 +42,14 @@ public class AIService {
                     Content:
                     %s
                     """, emailId, subject, sender, content);
-
-            return chatClient.prompt()
+            log.debug("AI user prompt: {}", userPrompt);
+            var result = chatClient.prompt()
                     .system(systemPrompt)
                     .user(userPrompt)
                     .call()
                     .entity(EmailAnalysisResult.class);
+            log.debug("AI analysis result: {}", result);
+            return result;
         } catch (Exception e) {
             log.error("Error during AI analysis for email {}: {}", emailId, e.getMessage());
             throw new EmailAnalysisException("AI Analysis failed", e);
