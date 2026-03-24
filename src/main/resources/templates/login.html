@@ -22,7 +22,12 @@
             </div>
 
             <div th:if="${param.error}" class="alert alert-danger py-2 small" role="alert">
-                Invalid username or password.
+                <th:block th:switch="${param.reason != null ? param.reason[0] : '_'}">
+                    <span th:case="'user_unknown'">No account uses this username (username is wrong). Usernames are case-sensitive.</span>
+                    <span th:case="'bad_password'">The password does not match this username (username was found; password is wrong).</span>
+                    <span th:case="'other'">Sign-in failed. See server logs for details.</span>
+                    <span th:case="*">Invalid username or password.</span>
+                </th:block>
             </div>
             <div th:if="${param.logout}" class="alert alert-success py-2 small" role="alert">
                 You have been signed out.

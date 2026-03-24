@@ -16,7 +16,9 @@ public class WebSecurityConfig {
 
   @Bean
   @Order(2)
-  public SecurityFilterChain applicationSecurityFilterChain(HttpSecurity http) throws Exception {
+  public SecurityFilterChain applicationSecurityFilterChain(
+          HttpSecurity http, LoginAuthenticationFailureHandler loginAuthenticationFailureHandler)
+      throws Exception {
     http.authorizeHttpRequests(
             auth ->
                 auth.requestMatchers(PathRequest.toStaticResources().atCommonLocations())
@@ -29,10 +31,16 @@ public class WebSecurityConfig {
             form ->
                 form.loginPage("/login")
                     .defaultSuccessUrl("/emails", true)
+                    .failureHandler(loginAuthenticationFailureHandler)
                     .permitAll())
         .logout(logout -> logout.logoutSuccessUrl("/login?logout").permitAll())
         .csrf(csrf -> csrf.disable());
 
     return http.build();
+  }
+
+  @Bean
+  public LoginAuthenticationFailureHandler loginAuthenticationFailureHandler() {
+    return new LoginAuthenticationFailureHandler();
   }
 }
