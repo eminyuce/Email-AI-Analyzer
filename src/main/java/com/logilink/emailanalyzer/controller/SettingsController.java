@@ -51,8 +51,35 @@ public class SettingsController {
     }
 
     @PostMapping("/new")
-    public String createNewProfile(RedirectAttributes redirectAttributes) {
-        Long createdId = appSettingsService.createNewProfile().getId();
+    public String openCreateNewProfilePage() {
+        return "redirect:/settings/new";
+    }
+
+    @GetMapping("/new")
+    public String newSettings(Model model) {
+        if (!model.containsAttribute("settingsForm")) {
+            model.addAttribute("settingsForm", new SettingsForm());
+        }
+        model.addAttribute("profileId", null);
+        model.addAttribute("activeProfileId", appSettingsService.getOrCreate().getId());
+        model.addAttribute("schedulerRunning", emailScheduler.isRunning());
+        model.addAttribute("formAction", "/settings/new");
+        return "settings/form";
+    }
+
+    @PostMapping("/new/save")
+    public String saveNewSettings(
+            @Valid @ModelAttribute("settingsForm") SettingsForm settingsForm,
+            BindingResult bindingResult,
+            RedirectAttributes redirectAttributes
+    ) {
+        if (bindingResult.hasErrors()) {
+            redirectAttributes.addFlashAttribute("org.springframework.validation.BindingResult.settingsForm", bindingResult);
+            redirectAttributes.addFlashAttribute("settingsForm", settingsForm);
+            return "redirect:/settings/new";
+        }
+
+        Long createdId = appSettingsService.createNewProfile(settingsForm).getId();
         redirectAttributes.addFlashAttribute("saved", true);
         return "redirect:/settings/" + createdId;
     }
@@ -81,6 +108,7 @@ public class SettingsController {
         model.addAttribute("profileId", id);
         model.addAttribute("activeProfileId", appSettingsService.getOrCreate().getId());
         model.addAttribute("schedulerRunning", emailScheduler.isRunning());
+        model.addAttribute("formAction", "/settings/" + id);
         return "settings/form";
     }
 

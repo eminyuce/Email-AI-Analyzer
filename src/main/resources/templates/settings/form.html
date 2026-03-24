@@ -28,7 +28,7 @@
                 onclick="document.getElementById('test-alert').classList.add('d-none')"></button>
     </div>
 
-    <form id="settingsForm" th:action="@{/settings/{id}(id=${profileId})}" th:object="${settingsForm}" method="post" class="row g-3">
+    <form id="settingsForm" th:action="${formAction}" th:object="${settingsForm}" method="post" class="row g-3">
         <div class="col-12">
             <div class="alert alert-danger" role="alert" th:if="${#fields.hasAnyErrors()}">
                 <div class="fw-semibold mb-1">Please fix the following errors:</div>

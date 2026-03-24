@@ -122,6 +122,14 @@ public class AppSettingsService {
     }
 
     @Transactional
+    public AppSettings createNewProfile(SettingsForm form) {
+        AppSettings created = AppSettings.builder()
+                .active(Boolean.FALSE)
+                .build();
+        return saveToProfile(created, form);
+    }
+
+    @Transactional
     public void activateProfile(Long id) {
         AppSettings target = getById(id);
         repository.deactivateAll();
