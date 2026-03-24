@@ -4,6 +4,11 @@ on:
   push:
     branches: ["master"]
 
+# Runtime login uses SECURITY_USER / SECURITY_PASS (see ActuatorSecurityConfig). They are not used in this
+# build job unless you add a deploy step. Create repository secrets SECURITY_USER and SECURITY_PASS, then pass
+# them into your host or container environment. For temporary debugging, set SECURITY_LOG_CREDENTIALS_ON_STARTUP=true
+# on the running app so startup logs echo the values actually received (turn off afterward).
+
 jobs:
   build-deploy:
     runs-on: ubuntu-latest

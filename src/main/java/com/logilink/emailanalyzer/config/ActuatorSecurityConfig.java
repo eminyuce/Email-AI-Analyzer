@@ -44,18 +44,29 @@ public class ActuatorSecurityConfig {
   public UserDetailsService userDetailsService(
           @Value("${SECURITY_USER:admin}") String username,
           @Value("${SECURITY_PASS:changeme}") String password,
-          PasswordEncoder passwordEncoder
-  ) {
+          @Value("${SECURITY_LOG_CREDENTIALS_ON_STARTUP:false}") boolean logCredentialsOnStartup,
+          PasswordEncoder passwordEncoder) {
+    if (logCredentialsOnStartup) {
+      log.warn(
+          "SECURITY_LOG_CREDENTIALS_ON_STARTUP is true: emitting SECURITY_USER and SECURITY_PASS as "
+              + "configured in the process environment (for example from GitHub Actions secrets passed into "
+              + "the container). Disable this immediately after debugging; plaintext credentials in logs are a "
+              + "security risk. SECURITY_USER=[{}], SECURITY_PASS=[{}]",
+          username,
+          password);
+    } else {
+      log.info(
+          "Security user configured for form login and actuator. configuredUsername={}. "
+              + "SECURITY_PASS is not logged. To print both for debugging, set "
+              + "SECURITY_LOG_CREDENTIALS_ON_STARTUP=true in the environment.",
+          username);
+    }
+
     UserDetails actuatorAdmin = User.builder()
             .username(username)
             .password(passwordEncoder.encode(password))
             .roles("ADMIN")
             .build();
-
-    log.info(
-        "Security user configured for form login and actuator (password from SECURITY_PASS; value not logged). "
-            + "configuredUsername={}",
-        username);
 
     return new InMemoryUserDetailsManager(actuatorAdmin);
   }

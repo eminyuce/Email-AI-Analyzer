@@ -59,6 +59,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: password
       SECURITY_USER: ${SECURITY_USER:-admin}
       SECURITY_PASS: ${SECURITY_PASS:-changeme}
+      # Set to true only while debugging login; logs SECURITY_USER and SECURITY_PASS at startup.
+      SECURITY_LOG_CREDENTIALS_ON_STARTUP: ${SECURITY_LOG_CREDENTIALS_ON_STARTUP:-true}
       SPRING_AI_OLLAMA_BASE_URL: http://ollama:11434
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,info,prometheus,metrics"
       MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: "always"
