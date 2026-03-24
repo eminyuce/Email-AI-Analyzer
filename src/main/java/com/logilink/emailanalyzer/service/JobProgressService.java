@@ -101,6 +101,14 @@ public class JobProgressService {
         append("ERROR", "FAILED", message);
     }
 
+    public synchronized void logSchedulerEvent(String level, String message) {
+        String normalizedLevel = level == null ? "INFO" : level.trim().toUpperCase();
+        if (!"INFO".equals(normalizedLevel) && !"WARN".equals(normalizedLevel) && !"ERROR".equals(normalizedLevel)) {
+            normalizedLevel = "INFO";
+        }
+        append(normalizedLevel, "SCHEDULER", message);
+    }
+
     public ProgressSnapshot snapshot(long sinceId) {
         List<ProgressLogEntry> selectedLogs = new ArrayList<>();
         for (ProgressLogEntry entry : logs) {

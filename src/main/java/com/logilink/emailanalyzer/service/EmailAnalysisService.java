@@ -9,6 +9,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -50,5 +51,14 @@ public class EmailAnalysisService {
 
     public Optional<EmailAnalysis> findById(String id) {
         return repository.findById(id);
+    }
+
+    @Transactional
+    public long deleteAll() {
+        long total = repository.count();
+        if (total > 0) {
+            repository.deleteAllInBatch();
+        }
+        return total;
     }
 }

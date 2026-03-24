@@ -47,6 +47,8 @@ public class EmailScheduler {
     public void init() {
         boolean enabled = Boolean.TRUE.equals(appSettingsService.getOrCreate().getSchedulerEnabled());
         if (!enabled) {
+            running = false;
+            jobProgressService.logSchedulerEvent("INFO", "Scheduler is disabled in active settings; cron job not started.");
             return;
         }
         try {
@@ -54,7 +56,9 @@ public class EmailScheduler {
             startInternal(cron);
         } catch (Exception ex) {
             running = false;
-            log.error("Scheduler is enabled but cron settings are missing/invalid: {}", ex.getMessage());
+            String message = "Scheduler is enabled but failed to start: " + ex.getMessage();
+            log.error(message, ex);
+            jobProgressService.logSchedulerEvent("ERROR", message);
         }
     }
 
@@ -73,9 +77,17 @@ public class EmailScheduler {
     }
 
     public synchronized void startWithCurrentSettings() {
-        String cron = appSettingsService.getRequiredSchedulerCron();
-        startInternal(cron);
-        appSettingsService.updateSchedulerEnabled(true);
+        try {
+            String cron = appSettingsService.getRequiredSchedulerCron();
+            startInternal(cron);
+            appSettingsService.updateSchedulerEnabled(true);
+        } catch (Exception ex) {
+            running = false;
+            String message = "Scheduler start failed: " + ex.getMessage();
+            log.error(message, ex);
+            jobProgressService.logSchedulerEvent("ERROR", message);
+            throw ex;
+        }
     }
 
     public synchronized void stopProcessing() {
@@ -83,6 +95,7 @@ public class EmailScheduler {
         running = false;
         appSettingsService.updateSchedulerEnabled(false);
         log.info("Email processing scheduler stopped.");
+        jobProgressService.logSchedulerEvent("INFO", "Scheduler stopped.");
     }
 
     public synchronized void applyCron(String cron) {
@@ -97,12 +110,17 @@ public class EmailScheduler {
         cancelCurrentTask();
         this.currentCron = cron;
         this.scheduledTask = taskScheduler.schedule(this::runScheduledJob, new CronTrigger(cron));
+        if (this.scheduledTask == null) {
+            throw new IllegalStateException("Task scheduler returned null while scheduling cron job.");
+        }
         this.running = true;
         log.info("Email processing scheduler started with cron: {}", cron);
+        jobProgressService.logSchedulerEvent("INFO", "Scheduler started with cron: " + cron);
     }
 
     private void runScheduledJob() {
         log.info("Starting scheduled email analysis job...");
+        jobProgressService.logSchedulerEvent("INFO", "Cron trigger fired. Starting scheduled email processing.");
         try {
             int maxEmails = appSettingsService.getRequiredSchedulerMaxEmails();
             int dateRangeDays = appSettingsService.getRequiredSchedulerDateRangeDays();
@@ -115,6 +133,7 @@ public class EmailScheduler {
             jobProgressService.completeRun("Scheduled job finished. Processed emails: " + processedCount + ".");
         } catch (Exception e) {
             log.error("Error in scheduled email analysis: {}", e.getMessage());
+            jobProgressService.logSchedulerEvent("ERROR", "Scheduled email processing failed: " + e.getMessage());
             jobProgressService.failRun("Scheduled job failed: " + e.getMessage());
         }
     }

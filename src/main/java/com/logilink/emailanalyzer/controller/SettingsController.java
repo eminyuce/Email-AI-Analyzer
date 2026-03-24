@@ -133,16 +133,24 @@ public class SettingsController {
     @PostMapping("/scheduler/start")
     @ResponseBody
     public ResponseEntity<SchedulerControlResponse> startScheduler(@ModelAttribute SettingsForm form) {
-        if (form.getSchedulerCron() != null && !form.getSchedulerCron().isBlank()) {
-            appSettingsService.updateSchedulerCron(form.getSchedulerCron());
-            emailScheduler.applyCron(form.getSchedulerCron());
+        try {
+            if (form.getSchedulerCron() != null && !form.getSchedulerCron().isBlank()) {
+                appSettingsService.updateSchedulerCron(form.getSchedulerCron());
+                emailScheduler.applyCron(form.getSchedulerCron());
+            }
+            emailScheduler.startWithCurrentSettings();
+            SchedulerControlResponse response = new SchedulerControlResponse();
+            response.setSuccess(true);
+            response.setRunning(emailScheduler.isRunning());
+            response.setMessage("Email processing started.");
+            return ResponseEntity.ok(response);
+        } catch (Exception ex) {
+            SchedulerControlResponse response = new SchedulerControlResponse();
+            response.setSuccess(false);
+            response.setRunning(emailScheduler.isRunning());
+            response.setMessage("Email processing could not be started: " + ex.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
-        emailScheduler.startWithCurrentSettings();
-        SchedulerControlResponse response = new SchedulerControlResponse();
-        response.setSuccess(true);
-        response.setRunning(emailScheduler.isRunning());
-        response.setMessage("Email processing started.");
-        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/scheduler/stop")
