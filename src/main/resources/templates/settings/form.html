@@ -29,6 +29,16 @@
     </div>
 
     <form id="settingsForm" th:action="@{/settings/{id}(id=${profileId})}" th:object="${settingsForm}" method="post" class="row g-3">
+        <div class="col-12">
+            <div class="alert alert-danger" role="alert" th:if="${#fields.hasAnyErrors()}">
+                <div class="fw-semibold mb-1">Please fix the following errors:</div>
+                <ul class="mb-0 ps-3">
+                    <li th:each="err : ${#fields.errors('*')}" th:text="${err}">Validation error</li>
+                    <li th:each="err : ${#fields.globalErrors()}" th:text="${err}">Validation error</li>
+                </ul>
+            </div>
+        </div>
+
         <!-- Email Section -->
         <div class="col-md-12">
             <div class="card">
@@ -79,7 +89,7 @@
                         </div>
                         <div class="col-md-6">
                             <label for="mailPassword" class="form-label">Mail Password</label>
-                            <input id="mailPassword" type="password" class="form-control" th:field="*{mailPassword}">
+                            <input id="mailPassword" type="text" class="form-control" th:field="*{mailPassword}">
                         </div>
                     </div>
                 </div>

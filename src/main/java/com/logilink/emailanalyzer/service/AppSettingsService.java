@@ -93,6 +93,27 @@ public class AppSettingsService {
     }
 
     @Transactional
+    public AppSettings createNewProfile() {
+        AppSettings created = AppSettings.builder()
+                .mailHost("")
+                .mailPort(null)
+                .mailUsername("")
+                .mailPassword("")
+                .mailSslEnabled(null)
+                .systemPrompt("")
+                .llmModel("")
+                .llmUrl("")
+                .llmTemperature(null)
+                .schedulerEnabled(Boolean.FALSE)
+                .schedulerCron("")
+                .schedulerDateRangeDays(null)
+                .schedulerMaxEmails(null)
+                .active(Boolean.FALSE)
+                .build();
+        return repository.save(created);
+    }
+
+    @Transactional
     public void activateProfile(Long id) {
         AppSettings target = getById(id);
         repository.deactivateAll();

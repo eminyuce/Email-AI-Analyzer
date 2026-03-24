@@ -51,7 +51,14 @@ public class SettingsController {
     }
 
     @PostMapping("/new")
-    public String createProfile(RedirectAttributes redirectAttributes) {
+    public String createNewProfile(RedirectAttributes redirectAttributes) {
+        Long createdId = appSettingsService.createNewProfile().getId();
+        redirectAttributes.addFlashAttribute("saved", true);
+        return "redirect:/settings/" + createdId;
+    }
+
+    @PostMapping("/duplicate")
+    public String duplicateProfile(RedirectAttributes redirectAttributes) {
         Long createdId = appSettingsService.createProfileFromActive().getId();
         redirectAttributes.addFlashAttribute("saved", true);
         return "redirect:/settings/" + createdId;
