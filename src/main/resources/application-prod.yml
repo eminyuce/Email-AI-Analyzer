@@ -3,9 +3,3 @@ spring:
     url: ${DB_URL:jdbc:mysql://db:3306/email_db}
     username: ${DB_USER:email_user}
     password: ${DB_PASSWORD:password}
-
-  ai:
-    ollama:
-      base-url: ${SPRING_AI_OLLAMA_BASE_URL:http://host.docker.internal:11434}
-      chat:
-        model: ${OLLAMA_MODEL:llama3.2}

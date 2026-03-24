@@ -7,6 +7,8 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.ollama.OllamaChatModel;
+import org.springframework.ai.ollama.api.OllamaApi;
 import org.springframework.ai.ollama.api.OllamaOptions;
 import org.springframework.stereotype.Service;
 
@@ -17,11 +19,9 @@ public class AIService {
 
     private static final Logger log = LoggerFactory.getLogger(AIService.class);
 
-    private final ChatClient.Builder chatClientBuilder;
     private final AppSettingsService appSettingsService;
 
-    public AIService(ChatClient.Builder builder, AppSettingsService appSettingsService) {
-        this.chatClientBuilder = builder;
+    public AIService(AppSettingsService appSettingsService) {
         this.appSettingsService = appSettingsService;
     }
 
@@ -32,7 +32,7 @@ public class AIService {
     public EmailAnalysisResult analyzeEmail(String emailId, String subject, String sender, String content, String systemPromptOverride) {
         try {
             AppSettings settings = appSettingsService.getOrCreate();
-            ChatClient chatClient = buildChatClient(settings);
+            ChatClient chatClient = createChatClient(settings);
             String systemPrompt = StringUtils.isNotBlank(systemPromptOverride)
                     ? systemPromptOverride
                     : settings.getSystemPrompt();
@@ -66,17 +66,35 @@ public class AIService {
         }
     }
 
-    private ChatClient buildChatClient(AppSettings settings) {
-        Float temperature = settings.getLlmTemperature() == null
+    private ChatClient createChatClient(AppSettings settings) {
+        String baseUrl = normalizeBaseUrl(settings.getLlmUrl());
+        if (StringUtils.isBlank(baseUrl)) {
+            throw new EmailAnalysisException("LLM URL is not configured in application settings.");
+        }
+        if (StringUtils.isBlank(settings.getLlmModel())) {
+            throw new EmailAnalysisException("LLM model is not configured in application settings.");
+        }
+        float temperature = settings.getLlmTemperature() == null
                 ? 0.3f
                 : settings.getLlmTemperature().floatValue();
 
+        OllamaApi ollamaApi = new OllamaApi(baseUrl);
         OllamaOptions options = OllamaOptions.create()
                 .withModel(settings.getLlmModel())
                 .withTemperature(temperature);
 
-        return chatClientBuilder
-                .defaultOptions(options)
-                .build();
+        OllamaChatModel chatModel = new OllamaChatModel(ollamaApi, options);
+        return ChatClient.builder(chatModel).build();
+    }
+
+    private static String normalizeBaseUrl(String llmUrl) {
+        if (StringUtils.isBlank(llmUrl)) {
+            return "";
+        }
+        String u = llmUrl.trim();
+        if (u.endsWith("/")) {
+            return u.substring(0, u.length() - 1);
+        }
+        return u;
     }
 }

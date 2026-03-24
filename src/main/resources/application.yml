@@ -13,15 +13,9 @@ spring:
       ddl-auto: update
     show-sql: false
 
-  ai:
-    ollama:
-      base-url: ${SPRING_AI_OLLAMA_BASE_URL:http://host.docker.internal:11434}
-      chat:
-        model: llama3.2
-        options:
-          num_gpu: 1
-          main_gpu: 0
-          temperature: 0.3
+  autoconfigure:
+    exclude:
+      - org.springframework.ai.autoconfigure.ollama.OllamaAutoConfiguration
 
 email:
   imap:
