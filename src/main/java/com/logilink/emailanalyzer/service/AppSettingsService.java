@@ -68,28 +68,36 @@ public class AppSettingsService {
     @Transactional
     public AppSettings createProfileFromActive() {
         AppSettings active = getActiveOrCreate();
+        AppSettings copy = cloneAsInactiveWithoutId(active);
+        return repository.save(copy);
+    }
+
+    private AppSettings cloneAsInactiveWithoutId(AppSettings source) {
         AppSettings copy = AppSettings.builder()
-                .mailHost(active.getMailHost())
-                .mailPort(active.getMailPort())
-                .mailUsername(active.getMailUsername())
-                .mailPassword(active.getMailPassword())
-                .mailSslEnabled(active.getMailSslEnabled())
-                .systemPrompt(active.getSystemPrompt())
-                .dbHost(active.getDbHost())
-                .dbPort(active.getDbPort())
-                .dbName(active.getDbName())
-                .dbUsername(active.getDbUsername())
-                .dbPassword(active.getDbPassword())
-                .llmModel(active.getLlmModel())
-                .llmUrl(active.getLlmUrl())
-                .llmTemperature(active.getLlmTemperature())
+                .mailHost(source.getMailHost())
+                .mailPort(source.getMailPort())
+                .mailUsername(source.getMailUsername())
+                .mailPassword(source.getMailPassword())
+                .mailSslEnabled(source.getMailSslEnabled())
+                .systemPrompt(source.getSystemPrompt())
+                .dbHost(source.getDbHost())
+                .dbPort(source.getDbPort())
+                .dbName(source.getDbName())
+                .dbUsername(source.getDbUsername())
+                .dbPassword(source.getDbPassword())
+                .llmModel(source.getLlmModel())
+                .llmUrl(source.getLlmUrl())
+                .llmTemperature(source.getLlmTemperature())
                 .schedulerEnabled(Boolean.FALSE)
-                .schedulerCron(active.getSchedulerCron())
-                .schedulerDateRangeDays(active.getSchedulerDateRangeDays())
-                .schedulerMaxEmails(active.getSchedulerMaxEmails())
+                .schedulerCron(source.getSchedulerCron())
+                .schedulerDateRangeDays(source.getSchedulerDateRangeDays())
+                .schedulerMaxEmails(source.getSchedulerMaxEmails())
                 .active(Boolean.FALSE)
                 .build();
-        return repository.save(copy);
+        // Duplicate must always be a new non-active row.
+        copy.setId(null);
+        copy.setActive(Boolean.FALSE);
+        return copy;
     }
 
     @Transactional
