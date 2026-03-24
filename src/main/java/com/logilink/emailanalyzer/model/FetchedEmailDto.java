@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * In-memory snapshot of an email loaded while the IMAP folder is still open.
@@ -20,17 +21,20 @@ public class FetchedEmailDto {
 
     private String emailId;
     private String subject;
-    private String sender;
-    /**
-     * Extracted plain/HTML-as-text body (same rules as {@code EmailService} parsing).
-     */
+    private List<String> senders;      // Changed from String
+    private List<String> recipientsTo;  // Added
+    private List<String> recipientsCc;  // Added
     private String content;
-    /**
-     * Prefer sent date, else received; for persistence and analysis.
-     */
     private LocalDateTime emailDate;
-    /**
-     * Server received time when present (e.g. for debug / listing APIs).
-     */
     private Instant receivedAt;
+
+    /**
+     * From addresses as one string for AI prompts and {@code EmailAnalysis.sender} (comma-separated if several).
+     */
+    public String getSenderLine() {
+        if (senders == null || senders.isEmpty()) {
+            return "";
+        }
+        return String.join(", ", senders);
+    }
 }

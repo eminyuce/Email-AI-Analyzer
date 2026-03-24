@@ -115,7 +115,7 @@ public class AnalysisService {
                 }
 
                 String subject = email.getSubject();
-                String sender = email.getSender() != null ? email.getSender() : "";
+                String sender = email.getSenderLine();
                 String content = email.getContent() != null ? email.getContent() : "";
 
                 LocalDateTime emailDate = email.getEmailDate();
@@ -139,7 +139,7 @@ public class AnalysisService {
             } catch (Exception e) {
                 String emailId = email.getEmailId();
                 String subject = email.getSubject();
-                String sender = email.getSender() != null ? email.getSender() : "";
+                String sender = email.getSenderLine();
                 String content = email.getContent() != null ? email.getContent() : "";
                 log.error(
                         "Analysis error for emailId={}, subject='{}', sender='{}', contentLength={}: {}",

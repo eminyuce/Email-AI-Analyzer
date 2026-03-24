@@ -18,10 +18,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Properties;
+import java.util.*;
 
 @Service
 public class EmailService {
@@ -201,23 +198,26 @@ public class EmailService {
     private FetchedEmailDto toFetchedEmailDto(Message message) throws MessagingException, IOException {
         String emailId = getEmailId(message);
         String subject = message.getSubject();
-        String sender = "";
-        if (message.getFrom() != null && message.getFrom().length > 0 && message.getFrom()[0] != null) {
-            sender = message.getFrom()[0].toString();
-        }
         String content = getTextFromMessage(message);
         Date received = message.getReceivedDate();
         Instant receivedAt = received != null ? received.toInstant() : null;
         return FetchedEmailDto.builder()
                 .emailId(emailId)
                 .subject(subject)
-                .sender(sender)
+                .senders(getAddresses(message.getFrom()))
+                .recipientsTo(getAddresses(message.getRecipients(Message.RecipientType.TO)))
+                .recipientsCc(getAddresses(message.getRecipients(Message.RecipientType.CC)))
                 .content(content != null ? content : "")
                 .emailDate(resolveEmailDate(message))
                 .receivedAt(receivedAt)
                 .build();
     }
-
+    private List<String> getAddresses(Address[] addresses) {
+        if (addresses == null) return Collections.emptyList();
+        return Arrays.stream(addresses)
+                .map(Address::toString)
+                .toList();
+    }
     private LocalDateTime resolveEmailDate(Message message) {
         try {
             Date sent = message.getSentDate();

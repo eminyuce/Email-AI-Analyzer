@@ -67,7 +67,7 @@ public class CoreRangeAnalysisService {
                 }
 
                 String subject = email.getSubject();
-                String sender = email.getSender() != null ? email.getSender() : "";
+                String sender = email.getSenderLine();
                 String content = email.getContent() != null ? email.getContent() : "";
 
                 EmailAnalysisResult result = aiService.analyzeEmail(emailId, subject, sender, content);
