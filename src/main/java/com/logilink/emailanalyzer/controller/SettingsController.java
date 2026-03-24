@@ -39,16 +39,46 @@ public class SettingsController {
 
     @GetMapping
     public String settings(Model model) {
+        Long activeProfileId = appSettingsService.getOrCreate().getId();
+        return "redirect:/settings/" + activeProfileId;
+    }
+
+    @GetMapping("/list")
+    public String settingsList(Model model) {
+        model.addAttribute("profiles", appSettingsService.listAll());
+        model.addAttribute("activeProfileId", appSettingsService.getOrCreate().getId());
+        return "settings/list";
+    }
+
+    @PostMapping("/new")
+    public String createProfile(RedirectAttributes redirectAttributes) {
+        Long createdId = appSettingsService.createProfileFromActive().getId();
+        redirectAttributes.addFlashAttribute("saved", true);
+        return "redirect:/settings/" + createdId;
+    }
+
+    @PostMapping("/{id}/activate")
+    public String activateProfile(@PathVariable Long id, RedirectAttributes redirectAttributes) {
+        appSettingsService.activateProfile(id);
+        redirectAttributes.addFlashAttribute("saved", true);
+        return "redirect:/settings/list";
+    }
+
+    @GetMapping("/{id}")
+    public String editSettings(@PathVariable Long id, Model model) {
         if (!model.containsAttribute("settingsForm")) {
-            SettingsForm form = appSettingsMapper.toSettingsForm(appSettingsService.getOrCreate());
+            SettingsForm form = appSettingsMapper.toSettingsForm(appSettingsService.getById(id));
             model.addAttribute("settingsForm", form);
         }
+        model.addAttribute("profileId", id);
+        model.addAttribute("activeProfileId", appSettingsService.getOrCreate().getId());
         model.addAttribute("schedulerRunning", emailScheduler.isRunning());
         return "settings/form";
     }
 
-    @PostMapping
+    @PostMapping("/{id}")
     public String saveSettings(
+            @PathVariable Long id,
             @Valid @ModelAttribute("settingsForm") SettingsForm settingsForm,
             BindingResult bindingResult,
             RedirectAttributes redirectAttributes
@@ -56,15 +86,15 @@ public class SettingsController {
         if (bindingResult.hasErrors()) {
             redirectAttributes.addFlashAttribute("org.springframework.validation.BindingResult.settingsForm", bindingResult);
             redirectAttributes.addFlashAttribute("settingsForm", settingsForm);
-            return "redirect:/settings";
+            return "redirect:/settings/" + id;
         }
 
-        applySettings(settingsForm);
+        applySettings(id, settingsForm);
         // Reflect persisted values after redirect so users see what is stored.
-        SettingsForm persistedForm = appSettingsMapper.toSettingsForm(appSettingsService.getOrCreate());
+        SettingsForm persistedForm = appSettingsMapper.toSettingsForm(appSettingsService.getById(id));
         redirectAttributes.addFlashAttribute("settingsForm", persistedForm);
         redirectAttributes.addFlashAttribute("saved", true);
-        return "redirect:/settings";
+        return "redirect:/settings/" + id;
     }
 
     @PostMapping("/test-smtp")
@@ -119,8 +149,12 @@ public class SettingsController {
         return ResponseEntity.ok(response);
     }
 
-    private void applySettings(SettingsForm settingsForm) {
-        appSettingsService.save(settingsForm);
+    private void applySettings(Long profileId, SettingsForm settingsForm) {
+        appSettingsService.saveToProfile(profileId, settingsForm);
+        Long activeProfileId = appSettingsService.getOrCreate().getId();
+        if (!activeProfileId.equals(profileId)) {
+            return;
+        }
         emailScheduler.applyCron(settingsForm.getSchedulerCron());
         if (Boolean.TRUE.equals(settingsForm.getSchedulerEnabled())) {
             emailScheduler.startWithCurrentSettings();

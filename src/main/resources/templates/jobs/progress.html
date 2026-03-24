@@ -12,6 +12,28 @@
         <span id="statusBadge" class="badge bg-secondary fs-6">Idle</span>
     </div>
 
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>Active Settings Used For Processing</strong>
+            <a id="activeSettingsLink" class="btn btn-outline-primary btn-sm"
+               th:href="@{/settings/{id}(id=${activeSettingsId})}">
+                <i class="bi bi-gear me-1"></i>Go to Active Settings
+            </a>
+        </div>
+        <div class="card-body">
+            <div class="row g-2 small">
+                <div class="col-md-3"><strong>Profile ID:</strong> <span id="activeSettingId">-</span></div>
+                <div class="col-md-3"><strong>Mail Host:</strong> <span id="activeMailHost">-</span></div>
+                <div class="col-md-3"><strong>Mail Port:</strong> <span id="activeMailPort">-</span></div>
+                <div class="col-md-3"><strong>Mail Username:</strong> <span id="activeMailUsername">-</span></div>
+                <div class="col-md-3"><strong>LLM Model:</strong> <span id="activeLlmModel">-</span></div>
+                <div class="col-md-3"><strong>LLM URL:</strong> <span id="activeLlmUrl">-</span></div>
+                <div class="col-md-3"><strong>Cron:</strong> <span id="activeSchedulerCron">-</span></div>
+                <div class="col-md-3"><strong>Range Days / Max:</strong> <span id="activeRangeAndMax">-</span></div>
+            </div>
+        </div>
+    </div>
+
     <div class="row g-3 mb-3">
         <div class="col-md-3">
             <div class="card p-3">
@@ -91,6 +113,15 @@
         const autoScroll = document.getElementById('autoScroll');
         const logContainer = document.getElementById('logContainer');
         const pollSpinner = document.getElementById('pollSpinner');
+        const activeSettingsLink = document.getElementById('activeSettingsLink');
+        const activeSettingId = document.getElementById('activeSettingId');
+        const activeMailHost = document.getElementById('activeMailHost');
+        const activeMailPort = document.getElementById('activeMailPort');
+        const activeMailUsername = document.getElementById('activeMailUsername');
+        const activeLlmModel = document.getElementById('activeLlmModel');
+        const activeLlmUrl = document.getElementById('activeLlmUrl');
+        const activeSchedulerCron = document.getElementById('activeSchedulerCron');
+        const activeRangeAndMax = document.getElementById('activeRangeAndMax');
 
         let lastLogId = 0;
         const knownLogIds = new Set();
@@ -107,6 +138,25 @@
         function toLocalTime(ts) {
             if (!ts) return '-';
             return new Date(ts).toLocaleString();
+        }
+
+        function updateActiveSettings(settings) {
+            if (!settings) {
+                return;
+            }
+            activeSettingId.textContent = settings.id ?? '-';
+            activeMailHost.textContent = settings.mailHost || '-';
+            activeMailPort.textContent = settings.mailPort ?? '-';
+            activeMailUsername.textContent = settings.mailUsername || '-';
+            activeLlmModel.textContent = settings.llmModel || '-';
+            activeLlmUrl.textContent = settings.llmUrl || '-';
+            activeSchedulerCron.textContent = settings.schedulerCron || '-';
+            const days = settings.schedulerDateRangeDays ?? '-';
+            const max = settings.schedulerMaxEmails ?? '-';
+            activeRangeAndMax.textContent = days + ' / ' + max;
+            if (settings.id != null) {
+                activeSettingsLink.href = '/settings/' + settings.id;
+            }
         }
 
         function updateHeader(snapshot) {
@@ -196,7 +246,9 @@
                 if (!response.ok) {
                     throw new Error('Failed to load progress');
                 }
-                const snapshot = await response.json();
+                const payload = await response.json();
+                updateActiveSettings(payload.activeSettings);
+                const snapshot = payload.progress || {};
                 updateHeader(snapshot);
                 appendLogRows(snapshot.logs || []);
             } catch (e) {

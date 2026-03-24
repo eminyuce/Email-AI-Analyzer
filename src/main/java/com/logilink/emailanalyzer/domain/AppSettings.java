@@ -2,6 +2,8 @@ package com.logilink.emailanalyzer.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
@@ -22,9 +24,8 @@ import lombok.Setter;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class AppSettings {
 
-    public static final Long SINGLETON_ID = 1L;
-
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @EqualsAndHashCode.Include
     private Long id;
 
@@ -82,4 +83,7 @@ public class AppSettings {
 
     @Column(name = "scheduler_max_emails")
     private Integer schedulerMaxEmails;
+
+    @Column(name = "active")
+    private Boolean active;
 }

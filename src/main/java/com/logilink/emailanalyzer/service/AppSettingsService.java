@@ -13,6 +13,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +24,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -49,12 +51,68 @@ public class AppSettingsService {
 
     @Transactional
     public AppSettings getOrCreate() {
-        return ensureSingletonSettings();
+        return getActiveOrCreate();
+    }
+
+    @Transactional(readOnly = true)
+    public List<AppSettings> listAll() {
+        return repository.findAll(Sort.by(Sort.Direction.ASC, "id"));
+    }
+
+    @Transactional(readOnly = true)
+    public AppSettings getById(Long id) {
+        return repository.findById(id)
+                .orElseThrow(() -> new EmailAnalysisException("Settings profile not found: " + id));
+    }
+
+    @Transactional
+    public AppSettings createProfileFromActive() {
+        AppSettings active = getActiveOrCreate();
+        AppSettings copy = AppSettings.builder()
+                .mailHost(active.getMailHost())
+                .mailPort(active.getMailPort())
+                .mailUsername(active.getMailUsername())
+                .mailPassword(active.getMailPassword())
+                .mailSslEnabled(active.getMailSslEnabled())
+                .systemPrompt(active.getSystemPrompt())
+                .dbHost(active.getDbHost())
+                .dbPort(active.getDbPort())
+                .dbName(active.getDbName())
+                .dbUsername(active.getDbUsername())
+                .dbPassword(active.getDbPassword())
+                .llmModel(active.getLlmModel())
+                .llmUrl(active.getLlmUrl())
+                .llmTemperature(active.getLlmTemperature())
+                .schedulerEnabled(Boolean.FALSE)
+                .schedulerCron(active.getSchedulerCron())
+                .schedulerDateRangeDays(active.getSchedulerDateRangeDays())
+                .schedulerMaxEmails(active.getSchedulerMaxEmails())
+                .active(Boolean.FALSE)
+                .build();
+        return repository.save(copy);
+    }
+
+    @Transactional
+    public void activateProfile(Long id) {
+        AppSettings target = getById(id);
+        repository.deactivateAll();
+        target.setActive(Boolean.TRUE);
+        repository.save(target);
     }
 
     @Transactional
     public AppSettings save(SettingsForm form) {
-        AppSettings settings = getOrCreate();
+        AppSettings settings = getActiveOrCreate();
+        return saveToProfile(settings, form);
+    }
+
+    @Transactional
+    public AppSettings saveToProfile(Long profileId, SettingsForm form) {
+        AppSettings settings = getById(profileId);
+        return saveToProfile(settings, form);
+    }
+
+    private AppSettings saveToProfile(AppSettings settings, SettingsForm form) {
         String mailHost = trim(form.getMailHost());
         Integer mailPort = form.getMailPort();
         String mailUsername = trim(form.getMailUsername());
@@ -109,7 +167,7 @@ public class AppSettingsService {
 
     @Transactional(readOnly = true)
     public String getRequiredSystemPrompt() {
-        String prompt = getExistingSettings().getSystemPrompt();
+        String prompt = getActiveRequiredSettings().getSystemPrompt();
         if (StringUtils.isBlank(prompt)) {
             throw new EmailAnalysisException(AppConstants.Messages.SYSTEM_PROMPT_MISSING);
         }
@@ -118,7 +176,7 @@ public class AppSettingsService {
 
     @Transactional(readOnly = true)
     public AppSettings getRequiredMailSettings() {
-        AppSettings settings = getExistingSettings();
+        AppSettings settings = getActiveRequiredSettings();
         if (isBlank(settings.getMailHost())
                 || settings.getMailPort() == null
                 || isBlank(settings.getMailUsername())
@@ -239,7 +297,7 @@ public class AppSettingsService {
 
     @Transactional(readOnly = true)
     public String getRequiredSchedulerCron() {
-        String cron = getExistingSettings().getSchedulerCron();
+        String cron = getActiveRequiredSettings().getSchedulerCron();
         if (isBlank(cron)) {
             throw new EmailAnalysisException("Scheduler cron is missing in settings.");
         }
@@ -248,7 +306,7 @@ public class AppSettingsService {
 
     @Transactional(readOnly = true)
     public int getRequiredSchedulerDateRangeDays() {
-        Integer dateRangeDays = getExistingSettings().getSchedulerDateRangeDays();
+        Integer dateRangeDays = getActiveRequiredSettings().getSchedulerDateRangeDays();
         if (dateRangeDays == null || dateRangeDays <= 0) {
             throw new EmailAnalysisException("Scheduler date range days is missing in settings.");
         }
@@ -257,7 +315,7 @@ public class AppSettingsService {
 
     @Transactional(readOnly = true)
     public int getRequiredSchedulerMaxEmails() {
-        Integer maxEmails = getExistingSettings().getSchedulerMaxEmails();
+        Integer maxEmails = getActiveRequiredSettings().getSchedulerMaxEmails();
         if (maxEmails == null || maxEmails <= 0) {
             throw new EmailAnalysisException("Scheduler max emails is missing in settings.");
         }
@@ -266,7 +324,6 @@ public class AppSettingsService {
 
     private AppSettings createDefault() {
         AppSettings defaults = AppSettings.builder()
-                .id(AppSettings.SINGLETON_ID)
                 .mailHost("")
                 .mailPort(null)
                 .mailUsername("")
@@ -280,59 +337,35 @@ public class AppSettingsService {
                 .schedulerCron("")
                 .schedulerDateRangeDays(null)
                 .schedulerMaxEmails(null)
+                .active(Boolean.TRUE)
                 .build();
         return repository.save(defaults);
     }
 
-    private AppSettings ensureSingletonSettings() {
-        java.util.List<AppSettings> allSettings = repository.findAll();
-        if (allSettings.isEmpty()) {
-            return createDefault();
-        }
-
-        AppSettings primary = allSettings.stream()
-                .filter(s -> AppSettings.SINGLETON_ID.equals(s.getId()))
-                .findFirst()
-                .orElse(allSettings.get(0));
-
-        // Normalize to exactly one row with id=1 so processing always reads one source of truth.
-        AppSettings normalizedPrimary = AppSettings.builder()
-                .id(AppSettings.SINGLETON_ID)
-                .mailHost(primary.getMailHost())
-                .mailPort(primary.getMailPort())
-                .mailUsername(primary.getMailUsername())
-                .mailPassword(primary.getMailPassword())
-                .mailSslEnabled(primary.getMailSslEnabled())
-                .systemPrompt(primary.getSystemPrompt())
-                .dbHost(primary.getDbHost())
-                .dbPort(primary.getDbPort())
-                .dbName(primary.getDbName())
-                .dbUsername(primary.getDbUsername())
-                .dbPassword(primary.getDbPassword())
-                .llmModel(primary.getLlmModel())
-                .llmUrl(primary.getLlmUrl())
-                .llmTemperature(primary.getLlmTemperature())
-                .schedulerEnabled(primary.getSchedulerEnabled())
-                .schedulerCron(primary.getSchedulerCron())
-                .schedulerDateRangeDays(primary.getSchedulerDateRangeDays())
-                .schedulerMaxEmails(primary.getSchedulerMaxEmails())
-                .build();
-
-        if (allSettings.size() > 1
-                || !AppSettings.SINGLETON_ID.equals(primary.getId())
-                || repository.findById(AppSettings.SINGLETON_ID).isEmpty()) {
-            log.warn("Detected {} app_settings row(s); normalizing to single row id={}.",
-                    allSettings.size(), AppSettings.SINGLETON_ID);
-            repository.deleteAllInBatch();
-            return repository.save(normalizedPrimary);
-        }
-
-        return primary;
+    private AppSettings getActiveOrCreate() {
+        return repository.findFirstByActiveTrue()
+                .orElseGet(() -> {
+                    List<AppSettings> existing = repository.findAll(Sort.by(Sort.Direction.ASC, "id"));
+                    if (existing.isEmpty()) {
+                        return createDefault();
+                    }
+                    AppSettings first = existing.get(0);
+                    first.setActive(Boolean.TRUE);
+                    repository.save(first);
+                    if (existing.size() > 1) {
+                        log.warn("No active settings profile found. Marked id={} as active.", first.getId());
+                    }
+                    return first;
+                });
     }
 
-    private AppSettings getExistingSettings() {
-        return repository.findById(AppSettings.SINGLETON_ID)
+    private AppSettings getActiveRequiredSettings() {
+        AppSettings active = repository.findFirstByActiveTrue()
                 .orElseThrow(() -> new EmailAnalysisException(AppConstants.Messages.SETTINGS_NOT_FOUND));
+        if (active.getId() == null) {
+            throw new EmailAnalysisException(AppConstants.Messages.SETTINGS_NOT_FOUND);
+        }
+        return active;
     }
 
     private static String trim(String value) {

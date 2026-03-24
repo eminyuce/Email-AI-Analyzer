@@ -8,7 +8,13 @@
 <body>
 <div layout:fragment="content">
     <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-        <h1 class="h2">Application Settings</h1>
+        <h1 class="h2">
+            Application Settings
+            <span class="badge bg-success ms-2" th:if="${profileId == activeProfileId}">Active</span>
+        </h1>
+        <a class="btn btn-outline-secondary btn-sm" href="/settings/list">
+            <i class="bi bi-list-ul me-1"></i> Profile List
+        </a>
     </div>
 
     <div class="alert alert-success alert-dismissible fade show" role="alert" th:if="${saved}">
@@ -22,7 +28,7 @@
                 onclick="document.getElementById('test-alert').classList.add('d-none')"></button>
     </div>
 
-    <form id="settingsForm" th:action="@{/settings}" th:object="${settingsForm}" method="post" class="row g-3">
+    <form id="settingsForm" th:action="@{/settings/{id}(id=${profileId})}" th:object="${settingsForm}" method="post" class="row g-3">
         <!-- Email Section -->
         <div class="col-md-12">
             <div class="card">
