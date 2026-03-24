@@ -45,21 +45,7 @@ public class EmailScheduler {
 
     @PostConstruct
     public void init() {
-        boolean enabled = Boolean.TRUE.equals(appSettingsService.getOrCreate().getSchedulerEnabled());
-        if (!enabled) {
-            running = false;
-            jobProgressService.logSchedulerEvent("INFO", "Scheduler is disabled in active settings; cron job not started.");
-            return;
-        }
-        try {
-            String cron = appSettingsService.getRequiredSchedulerCron();
-            startInternal(cron);
-        } catch (Exception ex) {
-            running = false;
-            String message = "Scheduler is enabled but failed to start: " + ex.getMessage();
-            log.error(message, ex);
-            jobProgressService.logSchedulerEvent("ERROR", message);
-        }
+        syncWithActiveSettings();
     }
 
     @PreDestroy
@@ -79,6 +65,9 @@ public class EmailScheduler {
     public synchronized void startWithCurrentSettings() {
         try {
             String cron = appSettingsService.getRequiredSchedulerCron();
+            // Fail fast on incomplete scheduler settings instead of failing only when cron fires.
+            appSettingsService.getRequiredSchedulerDateRangeDays();
+            appSettingsService.getRequiredSchedulerMaxEmails();
             startInternal(cron);
             appSettingsService.updateSchedulerEnabled(true);
         } catch (Exception ex) {
@@ -87,6 +76,29 @@ public class EmailScheduler {
             log.error(message, ex);
             jobProgressService.logSchedulerEvent("ERROR", message);
             throw ex;
+        }
+    }
+
+    public synchronized void syncWithActiveSettings() {
+        boolean enabled = Boolean.TRUE.equals(appSettingsService.getOrCreate().getSchedulerEnabled());
+        if (!enabled) {
+            cancelCurrentTask();
+            running = false;
+            currentCron = appSettingsService.getOrCreate().getSchedulerCron();
+            jobProgressService.logSchedulerEvent("INFO", "Scheduler is disabled in active settings; cron job not started.");
+            return;
+        }
+        try {
+            String cron = appSettingsService.getRequiredSchedulerCron();
+            appSettingsService.getRequiredSchedulerDateRangeDays();
+            appSettingsService.getRequiredSchedulerMaxEmails();
+            startInternal(cron);
+        } catch (Exception ex) {
+            cancelCurrentTask();
+            running = false;
+            String message = "Active settings scheduler could not be started: " + ex.getMessage();
+            log.error(message, ex);
+            jobProgressService.logSchedulerEvent("ERROR", message);
         }
     }
 

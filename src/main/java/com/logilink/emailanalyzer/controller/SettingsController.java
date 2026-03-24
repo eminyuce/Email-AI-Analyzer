@@ -67,6 +67,7 @@ public class SettingsController {
     @PostMapping("/{id}/activate")
     public String activateProfile(@PathVariable Long id, RedirectAttributes redirectAttributes) {
         appSettingsService.activateProfile(id);
+        emailScheduler.syncWithActiveSettings();
         redirectAttributes.addFlashAttribute("saved", true);
         return "redirect:/settings/list";
     }
