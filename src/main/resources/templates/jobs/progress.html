@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Job Progress</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Email Processing Progress</h1>
+        <span id="statusBadge" class="badge bg-secondary fs-6">Idle</span>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card p-3">
+                <div class="text-muted small">Processed</div>
+                <div id="processedCount" class="h4 mb-0">0</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3">
+                <div class="text-muted small">Skipped</div>
+                <div id="skippedCount" class="h4 mb-0">0</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3">
+                <div class="text-muted small">Errors</div>
+                <div id="errorCount" class="h4 mb-0">0</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3">
+                <div class="text-muted small">Candidates</div>
+                <div id="totalCount" class="h4 mb-0">0</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <strong>Current run</strong>
+                <small id="runMeta" class="text-muted">Waiting for scheduler activity...</small>
+            </div>
+            <div class="progress" style="height: 20px;">
+                <div id="progressBar" class="progress-bar progress-bar-striped" role="progressbar" style="width: 0%">0%</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>Live Logs (refresh every 3s)</strong>
+            <div class="d-flex gap-2 align-items-center">
+                <input id="logFilter" type="text" class="form-control form-control-sm" placeholder="Filter logs" style="width: 220px;">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="autoScroll" checked>
+                    <label class="form-check-label small" for="autoScroll">Auto-scroll</label>
+                </div>
+                <div id="pollSpinner" class="spinner-border spinner-border-sm text-primary d-none" role="status"></div>
+            </div>
+        </div>
+        <div id="logContainer" class="card-body" style="height: 420px; overflow-y: auto;">
+            <table class="table table-sm table-striped align-middle mb-0">
+                <thead class="table-light sticky-top">
+                <tr>
+                    <th style="width: 180px;">Timestamp</th>
+                    <th style="width: 110px;">Level</th>
+                    <th style="width: 130px;">Status</th>
+                    <th>Message</th>
+                </tr>
+                </thead>
+                <tbody id="logTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script th:inline="javascript">
+        const statusBadge = document.getElementById('statusBadge');
+        const processedCount = document.getElementById('processedCount');
+        const skippedCount = document.getElementById('skippedCount');
+        const errorCount = document.getElementById('errorCount');
+        const totalCount = document.getElementById('totalCount');
+        const runMeta = document.getElementById('runMeta');
+        const progressBar = document.getElementById('progressBar');
+        const logTableBody = document.getElementById('logTableBody');
+        const logFilter = document.getElementById('logFilter');
+        const autoScroll = document.getElementById('autoScroll');
+        const logContainer = document.getElementById('logContainer');
+        const pollSpinner = document.getElementById('pollSpinner');
+
+        let lastLogId = 0;
+        const knownLogIds = new Set();
+        const allRows = [];
+        let pollInFlight = false;
+
+        function toBadgeClass(status) {
+            if (status === 'RUNNING') return 'bg-primary';
+            if (status === 'COMPLETED') return 'bg-success';
+            if (status === 'FAILED') return 'bg-danger';
+            return 'bg-secondary';
+        }
+
+        function toLocalTime(ts) {
+            if (!ts) return '-';
+            return new Date(ts).toLocaleString();
+        }
+
+        function updateHeader(snapshot) {
+            const statusText = snapshot.status || 'IDLE';
+            statusBadge.className = 'badge fs-6 ' + toBadgeClass(statusText);
+            statusBadge.textContent = statusText;
+
+            processedCount.textContent = String(snapshot.processedCount ?? 0);
+            skippedCount.textContent = String(snapshot.skippedCount ?? 0);
+            errorCount.textContent = String(snapshot.errorCount ?? 0);
+            totalCount.textContent = String(snapshot.totalCandidates ?? 0);
+
+            const cron = snapshot.schedulerCron || '-';
+            runMeta.textContent = 'Cron: ' + cron + ' | Started: ' + toLocalTime(snapshot.startedAt) + ' | Completed: ' + toLocalTime(snapshot.completedAt);
+
+            const done = (snapshot.processedCount ?? 0) + (snapshot.skippedCount ?? 0) + (snapshot.errorCount ?? 0);
+            const total = snapshot.totalCandidates ?? 0;
+            const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+            progressBar.style.width = pct + '%';
+            progressBar.textContent = pct + '%';
+            progressBar.className = 'progress-bar progress-bar-striped' + (statusText === 'RUNNING' ? ' progress-bar-animated' : '');
+        }
+
+        function appendLogRows(entries) {
+            if (!entries || entries.length === 0) {
+                return;
+            }
+            const filter = (logFilter.value || '').toLowerCase().trim();
+            for (const entry of entries) {
+                if (knownLogIds.has(entry.id)) {
+                    continue;
+                }
+                knownLogIds.add(entry.id);
+                lastLogId = Math.max(lastLogId, entry.id);
+
+                const tr = document.createElement('tr');
+                if (entry.level === 'ERROR') {
+                    tr.classList.add('table-danger');
+                } else if (entry.level === 'WARN') {
+                    tr.classList.add('table-warning');
+                }
+
+                const timestamp = document.createElement('td');
+                timestamp.textContent = toLocalTime(entry.timestamp);
+                const level = document.createElement('td');
+                level.textContent = entry.level;
+                const status = document.createElement('td');
+                status.textContent = entry.status;
+                const message = document.createElement('td');
+                message.textContent = entry.message;
+
+                tr.appendChild(timestamp);
+                tr.appendChild(level);
+                tr.appendChild(status);
+                tr.appendChild(message);
+
+                allRows.push({id: entry.id, tr: tr, searchable: (entry.level + ' ' + entry.status + ' ' + entry.message).toLowerCase()});
+
+                if (!filter || (entry.level + ' ' + entry.status + ' ' + entry.message).toLowerCase().includes(filter)) {
+                    logTableBody.appendChild(tr);
+                }
+            }
+
+            if (autoScroll.checked) {
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+        }
+
+        function applyFilter() {
+            const filter = (logFilter.value || '').toLowerCase().trim();
+            logTableBody.innerHTML = '';
+            for (const row of allRows) {
+                if (!filter || row.searchable.includes(filter)) {
+                    logTableBody.appendChild(row.tr);
+                }
+            }
+        }
+
+        async function pollProgress() {
+            if (pollInFlight) {
+                return;
+            }
+            pollInFlight = true;
+            pollSpinner.classList.remove('d-none');
+            try {
+                const response = await fetch('/api/jobs/progress?sinceId=' + encodeURIComponent(lastLogId));
+                if (!response.ok) {
+                    throw new Error('Failed to load progress');
+                }
+                const snapshot = await response.json();
+                updateHeader(snapshot);
+                appendLogRows(snapshot.logs || []);
+            } catch (e) {
+                // Keep polling even if one request fails.
+            } finally {
+                pollInFlight = false;
+                pollSpinner.classList.add('d-none');
+            }
+        }
+
+        logFilter.addEventListener('input', applyFilter);
+        pollProgress();
+        setInterval(pollProgress, 3000);
+    </script>
+</div>
+</body>
+</html>

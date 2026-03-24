@@ -27,17 +27,20 @@ public class AnalysisService {
   private final AIService aiService;
   private final EmailAnalysisRepository repository;
   private final MeterRegistry meterRegistry;
+  private final JobProgressService jobProgressService;
 
   public AnalysisService(
       EmailService emailService,
       AIService aiService,
       EmailAnalysisRepository repository,
-      MeterRegistry meterRegistry
+      MeterRegistry meterRegistry,
+      JobProgressService jobProgressService
   ) {
     this.emailService = emailService;
     this.aiService = aiService;
     this.repository = repository;
     this.meterRegistry = meterRegistry;
+    this.jobProgressService = jobProgressService;
   }
 
   @Transactional
@@ -91,6 +94,7 @@ public class AnalysisService {
 
     private List<EmailAnalysis> processMessages(List<FetchedEmailDto> emails) {
         log.info("Found {} emails to analyze.", emails.size());
+        jobProgressService.setTotalCandidates(emails.size());
         List<EmailAnalysis> processedAnalyses = new ArrayList<>();
 
         for (FetchedEmailDto email : emails) {
@@ -100,6 +104,7 @@ public class AnalysisService {
                 // Idempotency check
                 if (repository.existsById(emailId)) {
                     log.info("Email {} already processed. Skipping.", emailId);
+                    jobProgressService.incrementSkipped("Email " + emailId + " already processed. Skipped.");
                     continue;
                 }
 
@@ -117,11 +122,15 @@ public class AnalysisService {
                 // Save to DB
                 EmailAnalysis savedAnalysis = saveAnalysis(result);
                 processedAnalyses.add(savedAnalysis);
+                jobProgressService.incrementProcessed(
+                        "Processed email " + emailId + " with score " + result.getCriticalityScore() + "."
+                );
 
                 log.info("Analysis Complete for email {}: Score {}", emailId, result.getCriticalityScore());
 
             } catch (Exception e) {
                 log.error("Analysis error for an email: {}", e.getMessage());
+                jobProgressService.incrementError("Analysis error: " + e.getMessage());
             }
         }
         return processedAnalyses;

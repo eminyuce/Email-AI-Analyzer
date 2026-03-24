@@ -66,6 +66,9 @@ public class SettingsController {
         }
 
         applySettings(settingsForm);
+        // Reflect persisted values after redirect so users see what is stored.
+        SettingsForm persistedForm = appSettingsMapper.toSettingsForm(appSettingsService.getOrCreate());
+        redirectAttributes.addFlashAttribute("settingsForm", persistedForm);
         redirectAttributes.addFlashAttribute("saved", true);
         return "redirect:/settings";
     }

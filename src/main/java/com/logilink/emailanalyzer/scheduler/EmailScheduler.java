@@ -2,6 +2,7 @@ package com.logilink.emailanalyzer.scheduler;
 
 import com.logilink.emailanalyzer.service.AnalysisService;
 import com.logilink.emailanalyzer.service.AppSettingsService;
+import com.logilink.emailanalyzer.service.JobProgressService;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -23,14 +24,19 @@ public class EmailScheduler {
 
     private final AnalysisService analysisService;
     private final AppSettingsService appSettingsService;
+    private final JobProgressService jobProgressService;
     private final ThreadPoolTaskScheduler taskScheduler;
     private ScheduledFuture<?> scheduledTask;
     private volatile boolean running;
     private volatile String currentCron;
 
-    public EmailScheduler(AnalysisService analysisService, AppSettingsService appSettingsService) {
+    public EmailScheduler(
+            AnalysisService analysisService,
+            AppSettingsService appSettingsService,
+            JobProgressService jobProgressService) {
         this.analysisService = analysisService;
         this.appSettingsService = appSettingsService;
+        this.jobProgressService = jobProgressService;
         this.taskScheduler = new ThreadPoolTaskScheduler();
         this.taskScheduler.setPoolSize(1);
         this.taskScheduler.setThreadNamePrefix("email-scheduler-");
@@ -96,12 +102,16 @@ public class EmailScheduler {
         try {
             int maxEmails = appSettingsService.getSchedulerMaxEmailsOrDefault();
             int dateRangeDays = appSettingsService.getSchedulerDateRangeDaysOrDefault();
+            String cron = getCurrentCron();
+            jobProgressService.startRun(cron, maxEmails, dateRangeDays);
 
             Date endDate = Date.from(Instant.now());
             Date startDate = Date.from(Instant.now().minus(dateRangeDays, ChronoUnit.DAYS));
-            analysisService.processEmails(maxEmails, startDate, endDate);
+            int processedCount = analysisService.processEmails(maxEmails, startDate, endDate).size();
+            jobProgressService.completeRun("Scheduled job finished. Processed emails: " + processedCount + ".");
         } catch (Exception e) {
             log.error("Error in scheduled email analysis: {}", e.getMessage());
+            jobProgressService.failRun("Scheduled job failed: " + e.getMessage());
         }
     }
 
