@@ -41,12 +41,6 @@ public class SettingsController {
     public String settings(Model model) {
         if (!model.containsAttribute("settingsForm")) {
             SettingsForm form = appSettingsMapper.toSettingsForm(appSettingsService.getOrCreate());
-            if (form.getSchedulerDateRangeDays() == null) {
-                form.setSchedulerDateRangeDays(appSettingsService.getSchedulerDateRangeDaysOrDefault());
-            }
-            if (form.getSchedulerMaxEmails() == null) {
-                form.setSchedulerMaxEmails(appSettingsService.getSchedulerMaxEmailsOrDefault());
-            }
             model.addAttribute("settingsForm", form);
         }
         model.addAttribute("schedulerRunning", emailScheduler.isRunning());

@@ -45,12 +45,16 @@ public class EmailScheduler {
 
     @PostConstruct
     public void init() {
-        String cron = appSettingsService.getSchedulerCronOrDefault();
         boolean enabled = Boolean.TRUE.equals(appSettingsService.getOrCreate().getSchedulerEnabled());
-        if (enabled) {
+        if (!enabled) {
+            return;
+        }
+        try {
+            String cron = appSettingsService.getRequiredSchedulerCron();
             startInternal(cron);
-        } else {
-            this.currentCron = cron;
+        } catch (Exception ex) {
+            running = false;
+            log.error("Scheduler is enabled but cron settings are missing/invalid: {}", ex.getMessage());
         }
     }
 
@@ -65,11 +69,11 @@ public class EmailScheduler {
     }
 
     public synchronized String getCurrentCron() {
-        return currentCron != null ? currentCron : appSettingsService.getSchedulerCronOrDefault();
+        return currentCron;
     }
 
     public synchronized void startWithCurrentSettings() {
-        String cron = appSettingsService.getSchedulerCronOrDefault();
+        String cron = appSettingsService.getRequiredSchedulerCron();
         startInternal(cron);
         appSettingsService.updateSchedulerEnabled(true);
     }
@@ -100,8 +104,8 @@ public class EmailScheduler {
     private void runScheduledJob() {
         log.info("Starting scheduled email analysis job...");
         try {
-            int maxEmails = appSettingsService.getSchedulerMaxEmailsOrDefault();
-            int dateRangeDays = appSettingsService.getSchedulerDateRangeDaysOrDefault();
+            int maxEmails = appSettingsService.getRequiredSchedulerMaxEmails();
+            int dateRangeDays = appSettingsService.getRequiredSchedulerDateRangeDays();
             String cron = getCurrentCron();
             jobProgressService.startRun(cron, maxEmails, dateRangeDays);
 

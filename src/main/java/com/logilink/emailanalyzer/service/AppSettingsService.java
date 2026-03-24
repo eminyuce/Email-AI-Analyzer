@@ -34,32 +34,22 @@ public class AppSettingsService {
   private static final String IMAP_PREFIX = "imap.";
 
   private final AppSettingsRepository repository;
-  private final String defaultSchedulerCron;
-  private final int defaultSchedulerDateRangeDays;
-  private final int defaultSchedulerMaxEmails;
   private final int aiTestConnectTimeoutSeconds;
   private final int aiTestRequestTimeoutSeconds;
 
     public AppSettingsService(
             AppSettingsRepository repository,
-            @Value("${email.analysis.cron:0 */5 * * * *}") String defaultSchedulerCron,
-            @Value("${email.analysis.default-date-range-days:1}") int defaultSchedulerDateRangeDays,
-            @Value("${email.analysis.default-max-emails:1000}") int defaultSchedulerMaxEmails,
             @Value("${ai.test.connect-timeout-seconds:10}") int aiTestConnectTimeoutSeconds,
             @Value("${ai.test.request-timeout-seconds:75}") int aiTestRequestTimeoutSeconds
     ) {
         this.repository = repository;
-        this.defaultSchedulerCron = defaultSchedulerCron;
-        this.defaultSchedulerDateRangeDays = defaultSchedulerDateRangeDays;
-        this.defaultSchedulerMaxEmails = defaultSchedulerMaxEmails;
         this.aiTestConnectTimeoutSeconds = aiTestConnectTimeoutSeconds;
         this.aiTestRequestTimeoutSeconds = aiTestRequestTimeoutSeconds;
     }
 
     @Transactional
     public AppSettings getOrCreate() {
-        return repository.findById(AppSettings.SINGLETON_ID)
-                .orElseGet(this::createDefault);
+        return ensureSingletonSettings();
     }
 
     @Transactional
@@ -248,41 +238,96 @@ public class AppSettingsService {
     }
 
     @Transactional(readOnly = true)
-    public String getSchedulerCronOrDefault() {
-        String cron = getOrCreate().getSchedulerCron();
-        return isBlank(cron) ? defaultSchedulerCron : cron;
+    public String getRequiredSchedulerCron() {
+        String cron = getExistingSettings().getSchedulerCron();
+        if (isBlank(cron)) {
+            throw new EmailAnalysisException("Scheduler cron is missing in settings.");
+        }
+        return cron;
     }
 
     @Transactional(readOnly = true)
-    public int getSchedulerDateRangeDaysOrDefault() {
-        Integer dateRangeDays = getOrCreate().getSchedulerDateRangeDays();
-        return dateRangeDays == null || dateRangeDays <= 0 ? defaultSchedulerDateRangeDays : dateRangeDays;
+    public int getRequiredSchedulerDateRangeDays() {
+        Integer dateRangeDays = getExistingSettings().getSchedulerDateRangeDays();
+        if (dateRangeDays == null || dateRangeDays <= 0) {
+            throw new EmailAnalysisException("Scheduler date range days is missing in settings.");
+        }
+        return dateRangeDays;
     }
 
     @Transactional(readOnly = true)
-    public int getSchedulerMaxEmailsOrDefault() {
-        Integer maxEmails = getOrCreate().getSchedulerMaxEmails();
-        return maxEmails == null || maxEmails <= 0 ? defaultSchedulerMaxEmails : maxEmails;
+    public int getRequiredSchedulerMaxEmails() {
+        Integer maxEmails = getExistingSettings().getSchedulerMaxEmails();
+        if (maxEmails == null || maxEmails <= 0) {
+            throw new EmailAnalysisException("Scheduler max emails is missing in settings.");
+        }
+        return maxEmails;
     }
 
     private AppSettings createDefault() {
         AppSettings defaults = AppSettings.builder()
                 .id(AppSettings.SINGLETON_ID)
                 .mailHost("")
-                .mailPort(993)
+                .mailPort(null)
                 .mailUsername("")
                 .mailPassword("")
-                .mailSslEnabled(Boolean.TRUE)
+                .mailSslEnabled(null)
                 .systemPrompt("")
-                .llmModel("llama3.2")
-                .llmUrl("http://localhost:11434")
-                .llmTemperature(0.3)
+                .llmModel("")
+                .llmUrl("")
+                .llmTemperature(null)
                 .schedulerEnabled(Boolean.FALSE)
-                .schedulerCron(defaultSchedulerCron)
-                .schedulerDateRangeDays(defaultSchedulerDateRangeDays)
-                .schedulerMaxEmails(defaultSchedulerMaxEmails)
+                .schedulerCron("")
+                .schedulerDateRangeDays(null)
+                .schedulerMaxEmails(null)
                 .build();
         return repository.save(defaults);
+    }
+
+    private AppSettings ensureSingletonSettings() {
+        java.util.List<AppSettings> allSettings = repository.findAll();
+        if (allSettings.isEmpty()) {
+            return createDefault();
+        }
+
+        AppSettings primary = allSettings.stream()
+                .filter(s -> AppSettings.SINGLETON_ID.equals(s.getId()))
+                .findFirst()
+                .orElse(allSettings.get(0));
+
+        // Normalize to exactly one row with id=1 so processing always reads one source of truth.
+        AppSettings normalizedPrimary = AppSettings.builder()
+                .id(AppSettings.SINGLETON_ID)
+                .mailHost(primary.getMailHost())
+                .mailPort(primary.getMailPort())
+                .mailUsername(primary.getMailUsername())
+                .mailPassword(primary.getMailPassword())
+                .mailSslEnabled(primary.getMailSslEnabled())
+                .systemPrompt(primary.getSystemPrompt())
+                .dbHost(primary.getDbHost())
+                .dbPort(primary.getDbPort())
+                .dbName(primary.getDbName())
+                .dbUsername(primary.getDbUsername())
+                .dbPassword(primary.getDbPassword())
+                .llmModel(primary.getLlmModel())
+                .llmUrl(primary.getLlmUrl())
+                .llmTemperature(primary.getLlmTemperature())
+                .schedulerEnabled(primary.getSchedulerEnabled())
+                .schedulerCron(primary.getSchedulerCron())
+                .schedulerDateRangeDays(primary.getSchedulerDateRangeDays())
+                .schedulerMaxEmails(primary.getSchedulerMaxEmails())
+                .build();
+
+        if (allSettings.size() > 1
+                || !AppSettings.SINGLETON_ID.equals(primary.getId())
+                || repository.findById(AppSettings.SINGLETON_ID).isEmpty()) {
+            log.warn("Detected {} app_settings row(s); normalizing to single row id={}.",
+                    allSettings.size(), AppSettings.SINGLETON_ID);
+            repository.deleteAllInBatch();
+            return repository.save(normalizedPrimary);
+        }
+
+        return primary;
     }
 
     private AppSettings getExistingSettings() {

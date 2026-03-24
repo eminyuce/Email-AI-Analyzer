@@ -3,6 +3,7 @@ package com.logilink.emailanalyzer.controller;
 import com.logilink.emailanalyzer.model.ApiValidationError;
 import com.logilink.emailanalyzer.model.CoreRangeAnalysisRequest;
 import com.logilink.emailanalyzer.model.CoreRangeAnalysisResponse;
+import com.logilink.emailanalyzer.service.AppSettingsService;
 import com.logilink.emailanalyzer.service.CoreRangeAnalysisService;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,9 +26,13 @@ import java.util.Map;
 public class CoreRangeAnalysisController {
 
     private final CoreRangeAnalysisService coreRangeAnalysisService;
+    private final AppSettingsService appSettingsService;
 
-    public CoreRangeAnalysisController(CoreRangeAnalysisService coreRangeAnalysisService) {
+    public CoreRangeAnalysisController(
+            CoreRangeAnalysisService coreRangeAnalysisService,
+            AppSettingsService appSettingsService) {
         this.coreRangeAnalysisService = coreRangeAnalysisService;
+        this.appSettingsService = appSettingsService;
     }
 
     @PostMapping(path = "/analyze-range", consumes = "application/json", produces = "application/json")
@@ -46,10 +51,11 @@ public class CoreRangeAnalysisController {
         }
 
         try {
+            int maxEmailsFromSettings = appSettingsService.getRequiredSchedulerMaxEmails();
             CoreRangeAnalysisResponse response = coreRangeAnalysisService.analyzeByDateRange(
                     request.getStartDate(),
                     request.getEndDate(),
-                    request.getMaxEmails()
+                    maxEmailsFromSettings
             );
             return ResponseEntity.ok(response);
         } catch (Exception e) {
