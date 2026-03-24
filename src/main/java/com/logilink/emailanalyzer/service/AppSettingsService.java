@@ -126,10 +126,12 @@ public class AppSettingsService {
         String schedulerCron = trim(form.getSchedulerCron());
         Integer schedulerDateRangeDays = form.getSchedulerDateRangeDays();
         Integer schedulerMaxEmails = form.getSchedulerMaxEmails();
+        Boolean active = form.getActive();
 
         validateCron(schedulerCron);
         validatePositive("Date range days", schedulerDateRangeDays);
         validatePositive("Max emails", schedulerMaxEmails);
+        validateProfileStatusChange(settings, active);
 
         if (same(settings.getMailHost(), mailHost)
                 && same(settings.getMailPort(), mailPort)
@@ -143,7 +145,8 @@ public class AppSettingsService {
                 && same(settings.getSchedulerEnabled(), schedulerEnabled)
                 && same(settings.getSchedulerCron(), schedulerCron)
                 && same(settings.getSchedulerDateRangeDays(), schedulerDateRangeDays)
-                && same(settings.getSchedulerMaxEmails(), schedulerMaxEmails)) {
+                && same(settings.getSchedulerMaxEmails(), schedulerMaxEmails)
+                && same(settings.getActive(), active)) {
             return settings;
         }
 
@@ -161,6 +164,7 @@ public class AppSettingsService {
         settings.setSchedulerCron(schedulerCron);
         settings.setSchedulerDateRangeDays(schedulerDateRangeDays);
         settings.setSchedulerMaxEmails(schedulerMaxEmails);
+        applyProfileActiveState(settings, active);
 
         return repository.save(settings);
     }
@@ -398,6 +402,26 @@ public class AppSettingsService {
         if (value != null && value <= 0) {
             throw new EmailAnalysisException(fieldName + " must be greater than 0.");
         }
+    }
+
+    private void validateProfileStatusChange(AppSettings settings, Boolean targetActive) {
+        if (!Boolean.FALSE.equals(targetActive) || !Boolean.TRUE.equals(settings.getActive())) {
+            return;
+        }
+        if (!repository.existsByActiveTrueAndIdNot(settings.getId())) {
+            throw new EmailAnalysisException("At least one settings profile must remain Active.");
+        }
+    }
+
+    private void applyProfileActiveState(AppSettings settings, Boolean targetActive) {
+        if (!Boolean.TRUE.equals(targetActive)) {
+            settings.setActive(Boolean.FALSE);
+            return;
+        }
+        if (!Boolean.TRUE.equals(settings.getActive())) {
+            repository.deactivateAll();
+        }
+        settings.setActive(Boolean.TRUE);
     }
 
     private static boolean same(Object left, Object right) {

@@ -55,4 +55,7 @@ public class SettingsForm {
 
     @Min(value = 1, message = "Max emails must be at least 1")
     private Integer schedulerMaxEmails;
+
+    @NotNull(message = "Profile status is required")
+    private Boolean active;
 }

@@ -35,11 +35,20 @@
                 <div class="card-header bg-light">
                     <div class="d-flex justify-content-between align-items-center">
                         <h5 class="mb-0"><i class="bi bi-envelope me-2"></i>Email Server</h5>
-                        <button type="button" id="btn-test-smtp" class="btn btn-sm btn-outline-secondary">
-                            <span id="smtp-spinner" class="spinner-border spinner-border-sm d-none"
-                                  role="status"></span>
-                            Test SMTP
-                        </button>
+                        <div class="d-flex align-items-center gap-2">
+                            <div>
+                                <label for="active" class="form-label mb-0 me-1 small text-muted">Profile Status</label>
+                                <select id="active" class="form-select form-select-sm d-inline-block w-auto" th:field="*{active}">
+                                    <option th:value="true">Active</option>
+                                    <option th:value="false">Inactive</option>
+                                </select>
+                            </div>
+                            <button type="button" id="btn-test-smtp" class="btn btn-sm btn-outline-secondary">
+                                <span id="smtp-spinner" class="spinner-border spinner-border-sm d-none"
+                                      role="status"></span>
+                                Test SMTP
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div class="card-body">
@@ -60,8 +69,8 @@
                         <div class="col-md-3">
                             <label for="mailSslEnabled" class="form-label">SSL</label>
                             <select id="mailSslEnabled" class="form-select" th:field="*{mailSslEnabled}">
-                                <option th:value="true">Enabled</option>
-                                <option th:value="false">Disabled</option>
+                                <option th:value="true">Active</option>
+                                <option th:value="false">Inactive</option>
                             </select>
                         </div>
                         <div class="col-md-6">
@@ -146,8 +155,8 @@
                         <div class="col-md-2">
                             <label for="schedulerEnabled" class="form-label">Auto Start</label>
                             <select id="schedulerEnabled" class="form-select" th:field="*{schedulerEnabled}">
-                                <option th:value="true">Enabled</option>
-                                <option th:value="false">Disabled</option>
+                                <option th:value="true">Active</option>
+                                <option th:value="false">Inactive</option>
                             </select>
                         </div>
                         <div class="col-md-2">
