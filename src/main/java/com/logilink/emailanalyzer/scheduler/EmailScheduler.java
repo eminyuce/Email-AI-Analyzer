@@ -164,10 +164,12 @@ public class EmailScheduler {
             int maxEmails = appSettingsService.getRequiredSchedulerMaxEmails();
             int dateRangeDays = appSettingsService.getRequiredSchedulerDateRangeDays();
             String cron = getCurrentCron();
+            log.info("Scheduler job context: cron='{}', maxEmails={}, dateRangeDays={}", cron, maxEmails, dateRangeDays);
             jobProgressService.startRun(cron != null ? cron : "MANUAL", maxEmails, dateRangeDays);
 
             Date endDate = Date.from(Instant.now());
             Date startDate = Date.from(Instant.now().minus(dateRangeDays, ChronoUnit.DAYS));
+            log.debug("Scheduler run date window: startDate={}, endDate={}", startDate, endDate);
             int processedCount = analysisService.processEmails(maxEmails, startDate, endDate).size();
             
             if (jobProgressService.isStopRequested()) {
@@ -176,7 +178,7 @@ public class EmailScheduler {
                 jobProgressService.completeRun("Analysis finished. Processed emails: " + processedCount + ".");
             }
         } catch (Exception e) {
-            log.error("Error in email analysis: {}", e.getMessage());
+            log.error("Error in email analysis scheduler run: {}", e.getMessage(), e);
             jobProgressService.logSchedulerEvent("ERROR", "Email processing failed: " + e.getMessage());
             jobProgressService.failRun("Job failed: " + e.getMessage());
         }

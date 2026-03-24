@@ -9,7 +9,11 @@
 <div layout:fragment="content">
     <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
         <h1 class="h2">Email Processing Progress</h1>
-        <span id="statusBadge" class="badge bg-secondary fs-6">Idle</span>
+        <div class="text-end">
+            <div id="statusSentence" class="small text-muted mb-1">—</div>
+            <span id="statusBadge" class="badge bg-secondary fs-6">Idle</span>
+            <div id="activeJobType" class="small text-muted mt-1 d-none"></div>
+        </div>
     </div>
 
     <div class="card mb-3">
@@ -67,6 +71,7 @@
                 <strong>Current run</strong>
                 <small id="runMeta" class="text-muted">Waiting for scheduler activity...</small>
             </div>
+            <p id="statusReason" class="small mb-3 text-body-secondary">—</p>
             <div class="progress" style="height: 20px;">
                 <div id="progressBar" class="progress-bar progress-bar-striped" role="progressbar" style="width: 0%">0%</div>
             </div>
@@ -101,6 +106,9 @@
     </div>
 
     <script th:inline="javascript">
+        const statusSentence = document.getElementById('statusSentence');
+        const statusReason = document.getElementById('statusReason');
+        const activeJobTypeEl = document.getElementById('activeJobType');
         const statusBadge = document.getElementById('statusBadge');
         const processedCount = document.getElementById('processedCount');
         const skippedCount = document.getElementById('skippedCount');
@@ -161,6 +169,16 @@
 
         function updateHeader(snapshot) {
             const statusText = snapshot.status || 'IDLE';
+            statusSentence.textContent = snapshot.statusSentence || '';
+            statusReason.textContent = snapshot.statusReason || '';
+            if (snapshot.activeJobType && snapshot.jobRunning) {
+                activeJobTypeEl.textContent = 'Active job: ' + snapshot.activeJobType;
+                activeJobTypeEl.classList.remove('d-none');
+            } else {
+                activeJobTypeEl.textContent = '';
+                activeJobTypeEl.classList.add('d-none');
+            }
+
             statusBadge.className = 'badge fs-6 ' + toBadgeClass(statusText);
             statusBadge.textContent = statusText;
 

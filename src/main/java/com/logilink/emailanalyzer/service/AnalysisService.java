@@ -118,6 +118,8 @@ public class AnalysisService {
                 LocalDateTime emailDate = email.getEmailDate();
 
                 log.info("Analyzing email from: {}", sender);
+                log.debug("Preparing AI analysis for emailId={}, subject='{}', sender='{}', contentLength={}",
+                        emailId, subject, sender, content.length());
 
                 EmailAnalysisResult result = aiService.analyzeEmail(emailId, subject, sender, content);
                 result.resolveEmailDate(emailDate);
@@ -132,8 +134,22 @@ public class AnalysisService {
                 log.info("Analysis Complete for email {}: Score {}", emailId, result.getCriticalityScore());
 
             } catch (Exception e) {
-                log.error("Analysis error for an email: {}", e.getMessage());
-                jobProgressService.incrementError("Analysis error: " + e.getMessage());
+                String emailId = email.getEmailId();
+                String subject = email.getSubject();
+                String sender = email.getSender() != null ? email.getSender() : "";
+                String content = email.getContent() != null ? email.getContent() : "";
+                log.error(
+                        "Analysis error for emailId={}, subject='{}', sender='{}', contentLength={}: {}",
+                        emailId,
+                        subject,
+                        sender,
+                        content.length(),
+                        e.getMessage(),
+                        e
+                );
+                jobProgressService.incrementError(
+                        "Analysis error for emailId=" + emailId + ", subject='" + subject + "': " + e.getMessage()
+                );
             }
         }
         return processedAnalyses;

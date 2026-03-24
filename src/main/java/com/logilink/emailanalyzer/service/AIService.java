@@ -10,6 +10,8 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.ollama.api.OllamaOptions;
 import org.springframework.stereotype.Service;
 
+import java.util.Map;
+
 @Service
 public class AIService {
 
@@ -44,14 +46,22 @@ public class AIService {
                     """, emailId, subject, sender, content);
             log.debug("AI user prompt: {}", userPrompt);
             var result = chatClient.prompt()
-                    .system(systemPrompt)
-                    .user(userPrompt)
+                    .system(spec -> spec.text("{systemPrompt}").params(Map.of("systemPrompt", systemPrompt)))
+                    .user(spec -> spec.text("{userPrompt}").params(Map.of("userPrompt", userPrompt)))
                     .call()
                     .entity(EmailAnalysisResult.class);
             log.debug("AI analysis result: {}", result);
             return result;
         } catch (Exception e) {
-            log.error("Error during AI analysis for email {}: {}", emailId, e.getMessage());
+            log.error(
+                    "Error during AI analysis for email {}. subject='{}', sender='{}', contentLength={}, rootError={}",
+                    emailId,
+                    subject,
+                    sender,
+                    content == null ? 0 : content.length(),
+                    e.getMessage(),
+                    e
+            );
             throw new EmailAnalysisException("AI Analysis failed", e);
         }
     }

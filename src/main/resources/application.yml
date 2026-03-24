@@ -14,7 +14,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
 
   ai:
     ollama:
@@ -46,6 +46,8 @@ logging:
   level:
     root: INFO
     com.logilink.emailanalyzer: DEBUG
+    org.hibernate.SQL: WARN
+    org.hibernate.orm.jdbc.bind: WARN
 
 management:
   # Shares server.port: a separate management.server.port serves only actuator, not /api/**.
