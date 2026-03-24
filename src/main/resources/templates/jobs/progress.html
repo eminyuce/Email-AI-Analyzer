@@ -32,8 +32,9 @@
                 <div class="col-md-3"><strong>Mail Username:</strong> <span id="activeMailUsername">-</span></div>
                 <div class="col-md-3"><strong>LLM Model:</strong> <span id="activeLlmModel">-</span></div>
                 <div class="col-md-3"><strong>LLM URL:</strong> <span id="activeLlmUrl">-</span></div>
-                <div class="col-md-3"><strong>Cron:</strong> <span id="activeSchedulerCron">-</span></div>
-                <div class="col-md-3"><strong>Range Days / Max:</strong> <span id="activeRangeAndMax">-</span></div>
+                <div class="col-md-3"><strong>Trigger:</strong> <span id="activeTriggerMode">Manual (REST/UI)</span>
+                </div>
+                <div class="col-md-3"><strong>Range days / max:</strong> <span id="activeRangeAndMax">-</span></div>
             </div>
         </div>
     </div>
@@ -69,11 +70,13 @@
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <strong>Current run</strong>
-                <small id="runMeta" class="text-muted">Waiting for scheduler activity...</small>
+                <small id="runMeta" class="text-muted">Waiting for a batch run...</small>
             </div>
             <p id="statusReason" class="small mb-3 text-body-secondary">—</p>
             <div class="progress" style="height: 20px;">
-                <div id="progressBar" class="progress-bar progress-bar-striped" role="progressbar" style="width: 0%">0%</div>
+                <div id="progressBar" class="progress-bar progress-bar-striped" role="progressbar" style="width: 0%">
+                    0%
+                </div>
             </div>
         </div>
     </div>
@@ -82,7 +85,8 @@
         <div class="card-header d-flex justify-content-between align-items-center">
             <strong>Live Logs (refresh every 3s)</strong>
             <div class="d-flex gap-2 align-items-center">
-                <input id="logFilter" type="text" class="form-control form-control-sm" placeholder="Filter logs" style="width: 220px;">
+                <input id="logFilter" type="text" class="form-control form-control-sm" placeholder="Filter logs"
+                       style="width: 220px;">
                 <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox" id="autoScroll" checked>
                     <label class="form-check-label small" for="autoScroll">Auto-scroll</label>
@@ -128,7 +132,6 @@
         const activeMailUsername = document.getElementById('activeMailUsername');
         const activeLlmModel = document.getElementById('activeLlmModel');
         const activeLlmUrl = document.getElementById('activeLlmUrl');
-        const activeSchedulerCron = document.getElementById('activeSchedulerCron');
         const activeRangeAndMax = document.getElementById('activeRangeAndMax');
 
         let lastLogId = 0;
@@ -158,7 +161,6 @@
             activeMailUsername.textContent = settings.mailUsername || '-';
             activeLlmModel.textContent = settings.llmModel || '-';
             activeLlmUrl.textContent = settings.llmUrl || '-';
-            activeSchedulerCron.textContent = settings.schedulerCron || '-';
             const days = settings.schedulerDateRangeDays ?? '-';
             const max = settings.schedulerMaxEmails ?? '-';
             activeRangeAndMax.textContent = days + ' / ' + max;
@@ -187,8 +189,8 @@
             errorCount.textContent = String(snapshot.errorCount ?? 0);
             totalCount.textContent = String(snapshot.totalCandidates ?? 0);
 
-            const cron = snapshot.schedulerCron || '-';
-            runMeta.textContent = 'Cron: ' + cron + ' | Started: ' + toLocalTime(snapshot.startedAt) + ' | Completed: ' + toLocalTime(snapshot.completedAt);
+            const trigger = snapshot.runTrigger || '-';
+            runMeta.textContent = 'Trigger: ' + trigger + ' | Started: ' + toLocalTime(snapshot.startedAt) + ' | Completed: ' + toLocalTime(snapshot.completedAt);
 
             const done = (snapshot.processedCount ?? 0) + (snapshot.skippedCount ?? 0) + (snapshot.errorCount ?? 0);
             const total = snapshot.totalCandidates ?? 0;

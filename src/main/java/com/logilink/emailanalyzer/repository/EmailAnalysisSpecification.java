@@ -16,10 +16,15 @@ public class EmailAnalysisSpecification {
             Boolean actionNeeded,
             LocalDateTime dateFrom,
             LocalDateTime dateTo,
-            List<String> stakeholders
+            List<String> stakeholders,
+            Long settingId
     ) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
+
+            if (settingId != null) {
+                predicates.add(cb.equal(root.get("settingId"), settingId));
+            }
 
             if (keyword != null && !keyword.isBlank()) {
                 String likePattern = "%" + keyword.toLowerCase() + "%";

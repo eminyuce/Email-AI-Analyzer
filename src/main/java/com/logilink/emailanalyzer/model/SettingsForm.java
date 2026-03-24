@@ -4,14 +4,15 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.ToString;
 
 @Getter
 @Setter
 @NoArgsConstructor
+@ToString
 public class SettingsForm {
 
     @NotBlank(message = "Mail host is required")
@@ -43,16 +44,11 @@ public class SettingsForm {
     @NotNull(message = "LLM temperature is required")
     private Double llmTemperature;
 
-    @NotNull(message = "Scheduler enabled is required")
-    private Boolean schedulerEnabled;
-
-    @NotBlank(message = "Cron expression is required")
-    @Pattern(regexp = "^\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+$", message = "Cron must have 6 fields")
-    private String schedulerCron;
-
+    @NotNull(message = "Date range days is required")
     @Min(value = 1, message = "Date range days must be at least 1")
     private Integer schedulerDateRangeDays;
 
+    @NotNull(message = "Max emails is required")
     @Min(value = 1, message = "Max emails must be at least 1")
     private Integer schedulerMaxEmails;
 

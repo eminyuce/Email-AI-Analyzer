@@ -1,16 +1,16 @@
 package com.logilink.emailanalyzer.common;
 
 public enum MailStoreProtocol {
-  IMAP("imap"),
-  IMAPS("imaps");
+    IMAP("imap"),
+    IMAPS("imaps");
 
-  private final String value;
+    private final String value;
 
-  MailStoreProtocol(String value) {
-    this.value = value;
-  }
+    MailStoreProtocol(String value) {
+        this.value = value;
+    }
 
-  public String value() {
-    return value;
-  }
+    public String value() {
+        return value;
+    }
 }

@@ -4,12 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -31,6 +26,12 @@ public class EmailAnalysis {
     @Column(name = "email_id")
     @EqualsAndHashCode.Include
     private String emailId;
+
+    /**
+     * {@link com.logilink.emailanalyzer.domain.AppSettings#getId()} of the profile used when this row was created.
+     */
+    @Column(name = "setting_id")
+    private Long settingId;
 
     @Column(name = "email_date")
     private LocalDateTime emailDate;

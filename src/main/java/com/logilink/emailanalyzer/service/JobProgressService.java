@@ -23,12 +23,14 @@ public class JobProgressService {
     public record ProgressLogEntry(long id, Instant timestamp, String level, String status, String message) {
     }
 
-    /** One progress stream for this app: batch email analysis (scheduled or manual). */
+    /**
+     * One progress stream for this app: batch email analysis (manual / API triggers).
+     */
     public static final String JOB_TYPE_EMAIL_ANALYSIS = "EMAIL_ANALYSIS";
 
     public record ProgressSnapshot(
             JobStatus status,
-            String schedulerCron,
+            String runTrigger,
             Instant startedAt,
             Instant completedAt,
             Integer maxEmailsRequested,
@@ -59,7 +61,7 @@ public class JobProgressService {
 
     private volatile JobStatus status = JobStatus.IDLE;
     private volatile boolean stopRequested = false;
-    private volatile String schedulerCron = "";
+    private volatile String runTrigger = "";
     private volatile Instant startedAt;
     private volatile Instant completedAt;
     private volatile Integer maxEmailsRequested;
@@ -71,11 +73,15 @@ public class JobProgressService {
     private volatile String lastTerminalRunMessage = "";
     private volatile String lastSchedulerEventMessage = "";
 
-    public synchronized void startRun(String cron, int maxEmails, int rangeDays) {
+    public boolean isJobRunning() {
+        return status == JobStatus.RUNNING;
+    }
+
+    public synchronized void startRun(String trigger, int maxEmails, int rangeDays) {
         status = JobStatus.RUNNING;
         stopRequested = false;
         lastTerminalRunMessage = "";
-        schedulerCron = cron;
+        runTrigger = trigger == null ? "" : trigger;
         startedAt = Instant.now();
         completedAt = null;
         maxEmailsRequested = maxEmails;
@@ -159,7 +165,7 @@ public class JobProgressService {
         String reason = buildStatusReason();
         return new ProgressSnapshot(
                 status,
-                schedulerCron,
+                runTrigger,
                 startedAt,
                 completedAt,
                 maxEmailsRequested,
@@ -182,7 +188,7 @@ public class JobProgressService {
     private String buildStatusSentence() {
         return switch (status) {
             case RUNNING -> {
-                String trigger = describeTrigger(schedulerCron);
+                String trigger = describeTrigger(runTrigger);
                 if (stopRequested) {
                     yield "Stopping: email analysis is finishing the current message (" + trigger + ").";
                 }
@@ -224,39 +230,39 @@ public class JobProgressService {
                 }
             }
             case COMPLETED -> {
-                sb.append("The worker is idle until the next scheduled or manual run. ");
+                sb.append("The worker is idle until the next manual batch run. ");
                 if (lastTerminalRunMessage != null && !lastTerminalRunMessage.isBlank()) {
                     sb.append("Outcome: ").append(lastTerminalRunMessage);
                 }
             }
             case FAILED -> {
-                sb.append("Fix the error below (or in logs), then start the scheduler or run again. ");
+                sb.append("Fix the error below (or in logs), then run the batch again. ");
                 if (lastTerminalRunMessage != null && !lastTerminalRunMessage.isBlank()) {
                     sb.append("Failure detail: ").append(lastTerminalRunMessage);
                 }
             }
             case IDLE -> {
                 sb.append("No batch has started since the application started, or state was reset. ");
-                sb.append("Enable the scheduler or trigger a manual run to start email analysis.");
+                sb.append("Use Run Now on settings or the API to start email analysis.");
             }
         }
         if (lastSchedulerEventMessage != null && !lastSchedulerEventMessage.isBlank()) {
             if (sb.length() > 0 && sb.charAt(sb.length() - 1) != ' ') {
                 sb.append(' ');
             }
-            sb.append("Latest scheduler event: ").append(lastSchedulerEventMessage);
+            sb.append("Latest job event: ").append(lastSchedulerEventMessage);
         }
         return sb.toString().trim();
     }
 
-    private static String describeTrigger(String cron) {
-        if (cron == null || cron.isBlank()) {
+    private static String describeTrigger(String trigger) {
+        if (trigger == null || trigger.isBlank()) {
             return "trigger not recorded";
         }
-        if ("MANUAL".equalsIgnoreCase(cron.trim())) {
-            return "manual / run-now";
+        if ("MANUAL".equalsIgnoreCase(trigger.trim())) {
+            return "manual / API";
         }
-        return "cron '" + cron + "'";
+        return "'" + trigger + "'";
     }
 
     private void append(String level, String statusLabel, String message) {

@@ -31,7 +31,7 @@
                         <th>Status</th>
                         <th>Mail Host</th>
                         <th>LLM Model</th>
-                        <th>Cron</th>
+                        <th>Batch (days / max)</th>
                         <th class="text-end">Actions</th>
                     </tr>
                     </thead>
@@ -44,12 +44,17 @@
                         </td>
                         <td th:text="${p.mailHost != null ? p.mailHost : '-'}">-</td>
                         <td th:text="${p.llmModel != null ? p.llmModel : '-'}">-</td>
-                        <td th:text="${p.schedulerCron != null ? p.schedulerCron : '-'}">-</td>
+                        <td>
+                            <span th:text="${p.schedulerDateRangeDays != null ? p.schedulerDateRangeDays : '-'}">-</span>
+                            <span> / </span>
+                            <span th:text="${p.schedulerMaxEmails != null ? p.schedulerMaxEmails : '-'}">-</span>
+                        </td>
                         <td class="text-end">
                             <a class="btn btn-outline-primary btn-sm me-1" th:href="@{/settings/{id}(id=${p.id})}">
                                 Edit
                             </a>
-                            <form th:if="${p.id != activeProfileId}" th:action="@{/settings/{id}/activate(id=${p.id})}" method="post" class="d-inline">
+                            <form th:if="${p.id != activeProfileId}" th:action="@{/settings/{id}/activate(id=${p.id})}"
+                                  method="post" class="d-inline">
                                 <button type="submit" class="btn btn-success btn-sm">Activate</button>
                             </form>
                         </td>

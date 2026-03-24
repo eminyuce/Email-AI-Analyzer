@@ -6,10 +6,11 @@ import com.logilink.emailanalyzer.model.SchedulerControlResponse;
 import com.logilink.emailanalyzer.model.SettingsForm;
 import com.logilink.emailanalyzer.scheduler.EmailScheduler;
 import com.logilink.emailanalyzer.service.AppSettingsService;
+import com.logilink.emailanalyzer.service.JobProgressService;
 import jakarta.validation.Valid;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -26,15 +27,18 @@ public class SettingsController {
     private final AppSettingsService appSettingsService;
     private final EmailScheduler emailScheduler;
     private final AppSettingsMapper appSettingsMapper;
+    private final JobProgressService jobProgressService;
 
     public SettingsController(
             AppSettingsService appSettingsService,
             EmailScheduler emailScheduler,
-            AppSettingsMapper appSettingsMapper
+            AppSettingsMapper appSettingsMapper,
+            JobProgressService jobProgressService
     ) {
         this.appSettingsService = appSettingsService;
         this.emailScheduler = emailScheduler;
         this.appSettingsMapper = appSettingsMapper;
+        this.jobProgressService = jobProgressService;
     }
 
     @GetMapping
@@ -62,7 +66,7 @@ public class SettingsController {
         }
         model.addAttribute("profileId", null);
         model.addAttribute("activeProfileId", appSettingsService.getOrCreate().getId());
-        model.addAttribute("schedulerRunning", emailScheduler.isRunning());
+        model.addAttribute("analysisRunning", jobProgressService.isJobRunning());
         model.addAttribute("formAction", "/settings/new");
         return "settings/form";
     }
@@ -94,7 +98,6 @@ public class SettingsController {
     @PostMapping("/{id}/activate")
     public String activateProfile(@PathVariable Long id, RedirectAttributes redirectAttributes) {
         appSettingsService.activateProfile(id);
-        emailScheduler.syncWithActiveSettings();
         redirectAttributes.addFlashAttribute("saved", true);
         return "redirect:/settings/list";
     }
@@ -107,7 +110,7 @@ public class SettingsController {
         }
         model.addAttribute("profileId", id);
         model.addAttribute("activeProfileId", appSettingsService.getOrCreate().getId());
-        model.addAttribute("schedulerRunning", emailScheduler.isRunning());
+        model.addAttribute("analysisRunning", jobProgressService.isJobRunning());
         model.addAttribute("formAction", "/settings/" + id);
         return "settings/form";
     }
@@ -159,51 +162,23 @@ public class SettingsController {
         return ResponseEntity.status(status).body(toConnectionTestResponse(result));
     }
 
-    @PostMapping("/scheduler/start")
+    @PostMapping("/scheduler/run-now")
     @ResponseBody
-    public ResponseEntity<SchedulerControlResponse> startScheduler(@ModelAttribute SettingsForm form) {
+    public ResponseEntity<SchedulerControlResponse> runNow() {
         try {
-            // If the user provided a cron on the form, update the active profile's cron.
-            if (form.getSchedulerCron() != null && !form.getSchedulerCron().isBlank()) {
-                appSettingsService.updateSchedulerCron(form.getSchedulerCron());
-                emailScheduler.applyCron(form.getSchedulerCron());
-            }
-            emailScheduler.startWithCurrentSettings();
-            
+            emailScheduler.runNow();
             SchedulerControlResponse response = new SchedulerControlResponse();
             response.setSuccess(true);
-            response.setRunning(emailScheduler.isRunning());
-            response.setMessage("Scheduler (cron) started.");
+            response.setRunning(jobProgressService.isJobRunning());
+            response.setMessage("Email analysis batch started.");
             return ResponseEntity.ok(response);
         } catch (Exception ex) {
             SchedulerControlResponse response = new SchedulerControlResponse();
             response.setSuccess(false);
-            response.setRunning(emailScheduler.isRunning());
-            response.setMessage("Scheduler could not be started: " + ex.getMessage());
+            response.setRunning(jobProgressService.isJobRunning());
+            response.setMessage("Could not start analysis: " + ex.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
-    }
-
-    @PostMapping("/scheduler/stop")
-    @ResponseBody
-    public ResponseEntity<SchedulerControlResponse> stopScheduler() {
-        emailScheduler.stopProcessing();
-        SchedulerControlResponse response = new SchedulerControlResponse();
-        response.setSuccess(true);
-        response.setRunning(emailScheduler.isRunning());
-        response.setMessage("Scheduler (cron) stopped.");
-        return ResponseEntity.ok(response);
-    }
-
-    @PostMapping("/scheduler/run-now")
-    @ResponseBody
-    public ResponseEntity<SchedulerControlResponse> runNow() {
-        emailScheduler.runNow();
-        SchedulerControlResponse response = new SchedulerControlResponse();
-        response.setSuccess(true);
-        response.setRunning(emailScheduler.isRunning());
-        response.setMessage("Manual email analysis started.");
-        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/scheduler/stop-analysis")
@@ -212,23 +187,13 @@ public class SettingsController {
         emailScheduler.stopCurrentAnalysis();
         SchedulerControlResponse response = new SchedulerControlResponse();
         response.setSuccess(true);
-        response.setRunning(emailScheduler.isRunning());
+        response.setRunning(jobProgressService.isJobRunning());
         response.setMessage("Stop request sent to analysis process.");
         return ResponseEntity.ok(response);
     }
 
     private void applySettings(Long profileId, SettingsForm settingsForm) {
         appSettingsService.saveToProfile(profileId, settingsForm);
-        Long activeProfileId = appSettingsService.getOrCreate().getId();
-        if (!activeProfileId.equals(profileId)) {
-            return;
-        }
-        emailScheduler.applyCron(settingsForm.getSchedulerCron());
-        if (Boolean.TRUE.equals(settingsForm.getSchedulerEnabled())) {
-            emailScheduler.startWithCurrentSettings();
-        } else {
-            emailScheduler.stopProcessing();
-        }
     }
 
     private ConnectionTestResponse toConnectionTestResponse(AppSettingsService.TestEndpointResult result) {

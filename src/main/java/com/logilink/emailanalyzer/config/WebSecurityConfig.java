@@ -14,33 +14,33 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableMethodSecurity
 public class WebSecurityConfig {
 
-  @Bean
-  @Order(2)
-  public SecurityFilterChain applicationSecurityFilterChain(
-          HttpSecurity http, LoginAuthenticationFailureHandler loginAuthenticationFailureHandler)
-      throws Exception {
-    http.authorizeHttpRequests(
-            auth ->
-                auth.requestMatchers(PathRequest.toStaticResources().atCommonLocations())
-                    .permitAll()
-                    .requestMatchers("/login", "/error")
-                    .permitAll()
-                    .anyRequest()
-                    .hasRole("ADMIN"))
-        .formLogin(
-            form ->
-                form.loginPage("/login")
-                    .defaultSuccessUrl("/emails", true)
-                    .failureHandler(loginAuthenticationFailureHandler)
-                    .permitAll())
-        .logout(logout -> logout.logoutSuccessUrl("/login?logout").permitAll())
-        .csrf(csrf -> csrf.disable());
+    @Bean
+    @Order(2)
+    public SecurityFilterChain applicationSecurityFilterChain(
+            HttpSecurity http, LoginAuthenticationFailureHandler loginAuthenticationFailureHandler)
+            throws Exception {
+        http.authorizeHttpRequests(
+                        auth ->
+                                auth.requestMatchers(PathRequest.toStaticResources().atCommonLocations())
+                                        .permitAll()
+                                        .requestMatchers("/login", "/error")
+                                        .permitAll()
+                                        .anyRequest()
+                                        .hasRole("ADMIN"))
+                .formLogin(
+                        form ->
+                                form.loginPage("/login")
+                                        .defaultSuccessUrl("/emails", true)
+                                        .failureHandler(loginAuthenticationFailureHandler)
+                                        .permitAll())
+                .logout(logout -> logout.logoutSuccessUrl("/login?logout").permitAll())
+                .csrf(csrf -> csrf.disable());
 
-    return http.build();
-  }
+        return http.build();
+    }
 
-  @Bean
-  public LoginAuthenticationFailureHandler loginAuthenticationFailureHandler() {
-    return new LoginAuthenticationFailureHandler();
-  }
+    @Bean
+    public LoginAuthenticationFailureHandler loginAuthenticationFailureHandler() {
+        return new LoginAuthenticationFailureHandler();
+    }
 }

@@ -27,12 +27,22 @@
     <div class="card mb-4">
         <div class="card-body">
             <form th:action="@{/emails}" method="get" class="row g-3">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label for="keyword" class="form-label">Keyword</label>
                     <input type="text" class="form-control" id="keyword" name="keyword" th:value="${keyword}"
                            placeholder="Subject or Sender...">
                 </div>
                 <div class="col-md-3">
+                    <label for="settingId" class="form-label">Settings profile</label>
+                    <select class="form-select" id="settingId" name="settingId">
+                        <option value="" th:selected="${settingId == null}">All profiles</option>
+                        <option th:each="p : ${settingsProfiles}" th:value="${p.id}"
+                                th:selected="${settingId != null && settingId == p.id}"
+                                th:text="${'Profile #' + p.id + (p.active ? ' (active)' : '')}">1
+                        </option>
+                    </select>
+                </div>
+                <div class="col-md-2">
                     <label class="form-label">Criticality</label>
                     <div class="d-flex gap-2">
                         <select class="form-select" name="criticalityLevels" multiple size="3">
@@ -62,7 +72,7 @@
                         <label class="form-check-label" for="actionNeeded">Required</label>
                     </div>
                 </div>
-                <div class="col-md-3 d-flex align-items-end">
+                <div class="col-md-2 d-flex align-items-end">
                     <button type="submit" class="btn btn-primary w-100">
                         <i class="bi bi-search me-1"></i> Search
                     </button>
@@ -80,6 +90,7 @@
                     <tr>
                         <th>Score</th>
                         <th>Level</th>
+                        <th>Profile</th>
                         <th>Subject</th>
                         <th>Sender</th>
                         <th>Email Date</th>
@@ -100,6 +111,11 @@
                                   th:text="${email.criticalityLevel}">
                             </span>
                         </td>
+                        <td>
+                            <a th:if="${email.settingId != null}" th:href="@{/settings/{id}(id=${email.settingId})}"
+                               class="text-decoration-none" th:text="${'#' + email.settingId}">#1</a>
+                            <span th:if="${email.settingId == null}" class="text-muted">—</span>
+                        </td>
                         <td th:text="${email.subject}">Subject</td>
                         <td th:text="${email.sender}">Sender</td>
                         <td th:text="${#temporals.format(email.emailDate, 'yyyy-MM-dd HH:mm')}">Date</td>
@@ -111,13 +127,14 @@
                                title="No Action"></i>
                         </td>
                         <td>
-                            <a th:href="@{/emails/{emailId}(emailId=${email.emailId})}" class="btn btn-sm btn-outline-primary">
+                            <a th:href="@{/emails/{emailId}(emailId=${email.emailId})}"
+                               class="btn btn-sm btn-outline-primary">
                                 <i class="bi bi-eye"></i>
                             </a>
                         </td>
                     </tr>
                     <tr th:if="${page.isEmpty()}">
-                        <td colspan="8" class="text-center py-4">No analyzed emails found.</td>
+                        <td colspan="9" class="text-center py-4">No analyzed emails found.</td>
                     </tr>
                     </tbody>
                 </table>
@@ -130,15 +147,17 @@
                 <ul class="pagination justify-content-center mb-0">
                     <li class="page-item" th:classappend="${page.first ? 'disabled' : ''}">
                         <a class="page-link"
-                           th:href="@{/emails(page=${page.number - 1}, keyword=${keyword})}">Previous</a>
+                           th:href="@{/emails(page=${page.number - 1}, keyword=${keyword}, settingId=${settingId}, actionNeeded=${actionNeeded})}">Previous</a>
                     </li>
                     <li class="page-item" th:each="i : ${#numbers.sequence(0, page.totalPages - 1)}"
                         th:classappend="${page.number == i ? 'active' : ''}">
-                        <a class="page-link" th:href="@{/emails(page=${i}, keyword=${keyword})}"
+                        <a class="page-link"
+                           th:href="@{/emails(page=${i}, keyword=${keyword}, settingId=${settingId}, actionNeeded=${actionNeeded})}"
                            th:text="${i + 1}">1</a>
                     </li>
                     <li class="page-item" th:classappend="${page.last ? 'disabled' : ''}">
-                        <a class="page-link" th:href="@{/emails(page=${page.number + 1}, keyword=${keyword})}">Next</a>
+                        <a class="page-link"
+                           th:href="@{/emails(page=${page.number + 1}, keyword=${keyword}, settingId=${settingId}, actionNeeded=${actionNeeded})}">Next</a>
                     </li>
                 </ul>
             </nav>

@@ -1,7 +1,9 @@
 package com.logilink.emailanalyzer.controller;
 
 import com.logilink.emailanalyzer.domain.EmailAnalysis;
+import com.logilink.emailanalyzer.service.AppSettingsService;
 import com.logilink.emailanalyzer.service.EmailAnalysisService;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -10,11 +12,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.time.LocalDateTime;
@@ -26,9 +24,11 @@ import java.util.List;
 public class EmailAnalysisController {
 
     private final EmailAnalysisService service;
+    private final AppSettingsService appSettingsService;
 
-    public EmailAnalysisController(EmailAnalysisService service) {
+    public EmailAnalysisController(EmailAnalysisService service, AppSettingsService appSettingsService) {
         this.service = service;
+        this.appSettingsService = appSettingsService;
     }
 
     @GetMapping
@@ -39,10 +39,13 @@ public class EmailAnalysisController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateTo,
             @RequestParam(required = false) List<String> stakeholders,
+            @RequestParam(required = false) String settingId,
             @PageableDefault(size = 20, sort = "processedAt", direction = Sort.Direction.DESC) Pageable pageable,
             Model model
     ) {
-        Page<EmailAnalysis> page = service.search(keyword, criticalityLevels, actionNeeded, dateFrom, dateTo, stakeholders, pageable);
+        Long settingIdLong = StringUtils.isBlank(settingId) ? null : Long.valueOf(settingId.trim());
+        Page<EmailAnalysis> page = service.search(
+                keyword, criticalityLevels, actionNeeded, dateFrom, dateTo, stakeholders, settingIdLong, pageable);
 
         model.addAttribute("page", page);
         model.addAttribute("keyword", keyword);
@@ -51,6 +54,8 @@ public class EmailAnalysisController {
         model.addAttribute("dateFrom", dateFrom);
         model.addAttribute("dateTo", dateTo);
         model.addAttribute("stakeholders", stakeholders);
+        model.addAttribute("settingId", settingIdLong);
+        model.addAttribute("settingsProfiles", appSettingsService.listAll());
 
         return "email/list";
     }

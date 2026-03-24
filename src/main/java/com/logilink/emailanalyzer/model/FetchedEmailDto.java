@@ -21,10 +21,16 @@ public class FetchedEmailDto {
     private String emailId;
     private String subject;
     private String sender;
-    /** Extracted plain/HTML-as-text body (same rules as {@code EmailService} parsing). */
+    /**
+     * Extracted plain/HTML-as-text body (same rules as {@code EmailService} parsing).
+     */
     private String content;
-    /** Prefer sent date, else received; for persistence and analysis. */
+    /**
+     * Prefer sent date, else received; for persistence and analysis.
+     */
     private LocalDateTime emailDate;
-    /** Server received time when present (e.g. for debug / listing APIs). */
+    /**
+     * Server received time when present (e.g. for debug / listing APIs).
+     */
     private Instant receivedAt;
 }

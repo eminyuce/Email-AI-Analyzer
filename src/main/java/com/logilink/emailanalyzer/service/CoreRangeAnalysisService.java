@@ -30,17 +30,20 @@ public class CoreRangeAnalysisService {
     private final AIService aiService;
     private final EmailAnalysisRepository emailAnalysisRepository;
     private final EmailAnalysisMapper emailAnalysisMapper;
+    private final AppSettingsService appSettingsService;
 
     public CoreRangeAnalysisService(
             EmailService emailService,
             AIService aiService,
             EmailAnalysisRepository emailAnalysisRepository,
-            EmailAnalysisMapper emailAnalysisMapper
+            EmailAnalysisMapper emailAnalysisMapper,
+            AppSettingsService appSettingsService
     ) {
         this.emailService = emailService;
         this.aiService = aiService;
         this.emailAnalysisRepository = emailAnalysisRepository;
         this.emailAnalysisMapper = emailAnalysisMapper;
+        this.appSettingsService = appSettingsService;
     }
 
     public CoreRangeAnalysisResponse analyzeByDateRange(LocalDateTime startDate, LocalDateTime endDate, int maxEmails) {
@@ -118,8 +121,10 @@ public class CoreRangeAnalysisService {
     }
 
     private EmailAnalysis toEntity(EmailAnalysisResult result) {
+        Long settingId = appSettingsService.getOrCreate().getId();
         return EmailAnalysis.builder()
                 .emailId(result.getEmailId())
+                .settingId(settingId)
                 .emailDate(result.getEmailDate())
                 .subject(result.getSubject())
                 .sender(result.getSender())

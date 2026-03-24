@@ -7,11 +7,7 @@ import com.logilink.emailanalyzer.model.FetchedEmailDto;
 import jakarta.mail.*;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
-import jakarta.mail.search.AndTerm;
-import jakarta.mail.search.ComparisonTerm;
-import jakarta.mail.search.FlagTerm;
-import jakarta.mail.search.ReceivedDateTerm;
-import jakarta.mail.search.SearchTerm;
+import jakarta.mail.search.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,11 +37,11 @@ public class EmailService {
     private final String imapSslTrust;
 
     public EmailService(
-        AppSettingsService appSettingsService,
-        @Value("${email.imap.connection-timeout-ms:10000}") int imapConnectionTimeoutMs,
-        @Value("${email.imap.timeout-ms:20000}") int imapReadTimeoutMs,
-        @Value("${email.imap.write-timeout-ms:20000}") int imapWriteTimeoutMs,
-        @Value("${email.imap.ssl-trust:*}") String imapSslTrust
+            AppSettingsService appSettingsService,
+            @Value("${email.imap.connection-timeout-ms:10000}") int imapConnectionTimeoutMs,
+            @Value("${email.imap.timeout-ms:20000}") int imapReadTimeoutMs,
+            @Value("${email.imap.write-timeout-ms:20000}") int imapWriteTimeoutMs,
+            @Value("${email.imap.ssl-trust:*}") String imapSslTrust
     ) {
         this.appSettingsService = appSettingsService;
         this.imapConnectionTimeoutMs = imapConnectionTimeoutMs;
@@ -119,12 +115,12 @@ public class EmailService {
     }
 
     private List<FetchedEmailDto> fetchMessages(
-        AppSettings settings,
-        int maxEmails,
-        Date startDate,
-        Date endDate,
-        boolean unreadOnly,
-        boolean useImplicitSsl
+            AppSettings settings,
+            int maxEmails,
+            Date startDate,
+            Date endDate,
+            boolean unreadOnly,
+            boolean useImplicitSsl
     ) throws MessagingException {
         MailStoreProtocol protocol = useImplicitSsl ? MailStoreProtocol.IMAPS : MailStoreProtocol.IMAP;
         Properties properties = buildMailProperties(settings, protocol.value(), useImplicitSsl);
@@ -140,8 +136,8 @@ public class EmailService {
             emailFolder = store.getFolder("INBOX");
             emailFolder.open(Folder.READ_ONLY);
             SearchTerm dateRange = new AndTerm(
-                new ReceivedDateTerm(ComparisonTerm.GE, startDate),
-                new ReceivedDateTerm(ComparisonTerm.LE, endDate)
+                    new ReceivedDateTerm(ComparisonTerm.GE, startDate),
+                    new ReceivedDateTerm(ComparisonTerm.LE, endDate)
             );
             SearchTerm combinedTerm = dateRange;
             if (unreadOnly) {
@@ -150,11 +146,11 @@ public class EmailService {
             }
             Message[] foundMessages = emailFolder.search(combinedTerm);
             log.info(
-                "Found {} total {} messages in date range via {}. Limiting to {}",
-                foundMessages.length,
-                unreadOnly ? "unread" : "matching",
-                protocol.value().toUpperCase(),
-                maxEmails
+                    "Found {} total {} messages in date range via {}. Limiting to {}",
+                    foundMessages.length,
+                    unreadOnly ? "unread" : "matching",
+                    protocol.value().toUpperCase(),
+                    maxEmails
             );
 
             int count = 0;
@@ -213,13 +209,13 @@ public class EmailService {
         Date received = message.getReceivedDate();
         Instant receivedAt = received != null ? received.toInstant() : null;
         return FetchedEmailDto.builder()
-            .emailId(emailId)
-            .subject(subject)
-            .sender(sender)
-            .content(content != null ? content : "")
-            .emailDate(resolveEmailDate(message))
-            .receivedAt(receivedAt)
-            .build();
+                .emailId(emailId)
+                .subject(subject)
+                .sender(sender)
+                .content(content != null ? content : "")
+                .emailDate(resolveEmailDate(message))
+                .receivedAt(receivedAt)
+                .build();
     }
 
     private LocalDateTime resolveEmailDate(Message message) {
@@ -259,8 +255,8 @@ public class EmailService {
 
     private boolean shouldUseImplicitSsl(AppSettings settings) {
         return Boolean.TRUE.equals(settings.getMailSslEnabled())
-            || settings.getMailPort() == null
-            || settings.getMailPort() == DEFAULT_IMAPS_PORT;
+                || settings.getMailPort() == null
+                || settings.getMailPort() == DEFAULT_IMAPS_PORT;
     }
 
     private boolean isUnsupportedSslMessage(Throwable throwable) {
@@ -268,8 +264,8 @@ public class EmailService {
         if (message != null) {
             String normalized = message.toLowerCase();
             if (normalized.contains("unsupported or unrecognized ssl message")
-                || normalized.contains("ssl handshake")
-                || normalized.contains("unable to find valid certification path")) {
+                    || normalized.contains("ssl handshake")
+                    || normalized.contains("unable to find valid certification path")) {
                 return true;
             }
         }

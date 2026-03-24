@@ -36,6 +36,7 @@ public class EmailAnalysisService {
             LocalDateTime dateFrom,
             LocalDateTime dateTo,
             List<String> stakeholders,
+            Long settingId,
             Pageable pageable
     ) {
         Specification<EmailAnalysis> spec = EmailAnalysisSpecification.filter(
@@ -44,7 +45,8 @@ public class EmailAnalysisService {
                 actionNeeded,
                 dateFrom,
                 dateTo,
-                stakeholders
+                stakeholders,
+                settingId
         );
         return repository.findAll(spec, pageable);
     }

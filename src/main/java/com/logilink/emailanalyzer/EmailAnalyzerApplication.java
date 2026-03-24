@@ -8,7 +8,6 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -16,7 +15,6 @@ import java.util.Objects;
 import java.util.Properties;
 
 @SpringBootApplication
-@EnableScheduling
 public class EmailAnalyzerApplication {
 
     private static final Logger log = LoggerFactory.getLogger(EmailAnalyzerApplication.class);

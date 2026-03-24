@@ -5,11 +5,8 @@ server:
 spring:
   application:
     name: email-ai-analyzer
-  
-  datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/email_db}
-    username: ${DB_USER:email_user}
-    password: ${DB_PASSWORD:password}
+  profiles:
+    default: local
 
   jpa:
     hibernate:
@@ -33,7 +30,6 @@ email:
     write-timeout-ms: 20000
     ssl-trust: "*"
   analysis:
-    cron: "0 */5 * * * *"
     default-date-range-days: 1
     default-max-emails: 1000
 
@@ -66,7 +62,6 @@ management:
     tags:
       application: my-app
       region: us-east-1
-      env: prod
     enable:
       hikaricp: true
       tomcat: true

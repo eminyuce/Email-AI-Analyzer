@@ -3,32 +3,36 @@ package com.logilink.emailanalyzer.scheduler;
 import com.logilink.emailanalyzer.service.AnalysisService;
 import com.logilink.emailanalyzer.service.AppSettingsService;
 import com.logilink.emailanalyzer.service.JobProgressService;
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
-import org.springframework.scheduling.support.CronExpression;
-import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
-import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
+/**
+ * Starts the settings-based email batch on demand (settings UI or REST). No cron and no
+ * {@link org.springframework.scheduling.TaskScheduler} — only a single worker thread for fire-and-forget runs.
+ */
 @Component
 public class EmailScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(EmailScheduler.class);
+    private static final String MANUAL_TRIGGER = "MANUAL";
 
     private final AnalysisService analysisService;
     private final AppSettingsService appSettingsService;
     private final JobProgressService jobProgressService;
-    private final ThreadPoolTaskScheduler taskScheduler;
-    private ScheduledFuture<?> scheduledTask;
-    private volatile boolean running;
-    private volatile String currentCron;
+    private final ExecutorService analysisExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "email-batch-analysis");
+        t.setDaemon(false);
+        return t;
+    });
 
     public EmailScheduler(
             AnalysisService analysisService,
@@ -37,94 +41,31 @@ public class EmailScheduler {
         this.analysisService = analysisService;
         this.appSettingsService = appSettingsService;
         this.jobProgressService = jobProgressService;
-        this.taskScheduler = new ThreadPoolTaskScheduler();
-        this.taskScheduler.setPoolSize(1);
-        this.taskScheduler.setThreadNamePrefix("email-scheduler-");
-        this.taskScheduler.initialize();
-    }
-
-    @PostConstruct
-    public void init() {
-        log.info("Initializing EmailScheduler...");
-        try {
-            syncWithActiveSettings();
-        } catch (Exception e) {
-            log.error("Failed to sync scheduler with active settings on startup: {}", e.getMessage());
-        }
     }
 
     @PreDestroy
-    public synchronized void shutdown() {
-        cancelCurrentTask();
-        taskScheduler.shutdown();
-    }
-
-    public synchronized boolean isRunning() {
-        return running;
-    }
-
-    public synchronized String getCurrentCron() {
-        return currentCron;
-    }
-
-    public synchronized void startWithCurrentSettings() {
+    public void shutdown() {
+        analysisExecutor.shutdown();
         try {
-            String cron = appSettingsService.getRequiredSchedulerCron();
-            // Fail fast on incomplete scheduler settings instead of failing only when cron fires.
-            appSettingsService.getRequiredSchedulerDateRangeDays();
-            appSettingsService.getRequiredSchedulerMaxEmails();
-            startInternal(cron);
-            appSettingsService.updateSchedulerEnabled(true);
-        } catch (Exception ex) {
-            running = false;
-            String message = "Scheduler start failed: " + ex.getMessage();
-            log.error(message, ex);
-            jobProgressService.logSchedulerEvent("ERROR", message);
-            throw ex;
-        }
-    }
-
-    public synchronized void syncWithActiveSettings() {
-        var settings = appSettingsService.getOrCreate();
-        boolean enabled = Boolean.TRUE.equals(settings.getSchedulerEnabled());
-        String cron = settings.getSchedulerCron();
-        
-        if (!enabled) {
-            cancelCurrentTask();
-            running = false;
-            currentCron = cron;
-            log.info("Scheduler is disabled in active settings.");
-            jobProgressService.logSchedulerEvent("INFO", "Scheduler is disabled in active settings; cron job not started.");
-            return;
-        }
-
-        try {
-            if (cron == null || cron.isBlank()) {
-                throw new IllegalStateException("Cron expression is empty");
+            if (!analysisExecutor.awaitTermination(30, TimeUnit.SECONDS)) {
+                analysisExecutor.shutdownNow();
             }
-            appSettingsService.getRequiredSchedulerDateRangeDays();
-            appSettingsService.getRequiredSchedulerMaxEmails();
-            startInternal(cron);
-        } catch (Exception ex) {
-            cancelCurrentTask();
-            running = false;
-            String message = "Active settings scheduler could not be started: " + ex.getMessage();
-            log.error(message, ex);
-            jobProgressService.logSchedulerEvent("ERROR", message);
+        } catch (InterruptedException e) {
+            analysisExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
         }
     }
 
-    public synchronized void stopProcessing() {
-        cancelCurrentTask();
-        running = false;
-        appSettingsService.updateSchedulerEnabled(false);
-        log.info("Email processing scheduler stopped.");
-        jobProgressService.logSchedulerEvent("INFO", "Scheduler (cron) stopped.");
+    /**
+     * Whether a batch analysis job is currently executing.
+     */
+    public boolean isAnalysisRunning() {
+        return jobProgressService.isJobRunning();
     }
 
     public void runNow() {
         log.info("Manual execution of email analysis requested.");
-        taskScheduler.execute(this::runScheduledJob);
+        analysisExecutor.execute(this::runBatchJob);
     }
 
     public void stopCurrentAnalysis() {
@@ -132,27 +73,7 @@ public class EmailScheduler {
         jobProgressService.requestStop();
     }
 
-    public synchronized void applyCron(String cron) {
-        this.currentCron = cron;
-        if (running) {
-            startInternal(cron);
-        }
-    }
-
-    private void startInternal(String cron) {
-        validateCron(cron);
-        cancelCurrentTask();
-        this.currentCron = cron;
-        this.scheduledTask = taskScheduler.schedule(this::runScheduledJob, new CronTrigger(cron));
-        if (this.scheduledTask == null) {
-            throw new IllegalStateException("Task scheduler returned null while scheduling cron job.");
-        }
-        this.running = true;
-        log.info("Email processing scheduler started with cron: {}", cron);
-        jobProgressService.logSchedulerEvent("INFO", "Scheduler started with cron: " + cron);
-    }
-
-    private void runScheduledJob() {
+    private void runBatchJob() {
         if (jobProgressService.snapshot(0).status() == JobProgressService.JobStatus.RUNNING) {
             log.warn("An analysis job is already running. Skipping this trigger.");
             jobProgressService.logSchedulerEvent("WARN", "Trigger skipped because an analysis is already in progress.");
@@ -163,35 +84,23 @@ public class EmailScheduler {
         try {
             int maxEmails = appSettingsService.getRequiredSchedulerMaxEmails();
             int dateRangeDays = appSettingsService.getRequiredSchedulerDateRangeDays();
-            String cron = getCurrentCron();
-            log.info("Scheduler job context: cron='{}', maxEmails={}, dateRangeDays={}", cron, maxEmails, dateRangeDays);
-            jobProgressService.startRun(cron != null ? cron : "MANUAL", maxEmails, dateRangeDays);
+            log.info("Batch job context: maxEmails={}, dateRangeDays={}", maxEmails, dateRangeDays);
+            jobProgressService.startRun(MANUAL_TRIGGER, maxEmails, dateRangeDays);
 
             Date endDate = Date.from(Instant.now());
             Date startDate = Date.from(Instant.now().minus(dateRangeDays, ChronoUnit.DAYS));
-            log.debug("Scheduler run date window: startDate={}, endDate={}", startDate, endDate);
+            log.debug("Batch run date window: startDate={}, endDate={}", startDate, endDate);
             int processedCount = analysisService.processEmails(maxEmails, startDate, endDate).size();
-            
+
             if (jobProgressService.isStopRequested()) {
                 jobProgressService.completeRun("Analysis stopped by user. Processed emails: " + processedCount + ".");
             } else {
                 jobProgressService.completeRun("Analysis finished. Processed emails: " + processedCount + ".");
             }
         } catch (Exception e) {
-            log.error("Error in email analysis scheduler run: {}", e.getMessage(), e);
+            log.error("Error in email analysis batch run: {}", e.getMessage(), e);
             jobProgressService.logSchedulerEvent("ERROR", "Email processing failed: " + e.getMessage());
             jobProgressService.failRun("Job failed: " + e.getMessage());
         }
-    }
-
-    private void cancelCurrentTask() {
-        if (scheduledTask != null) {
-            scheduledTask.cancel(false);
-            scheduledTask = null;
-        }
-    }
-
-    private void validateCron(String cron) {
-        CronExpression.parse(cron);
     }
 }

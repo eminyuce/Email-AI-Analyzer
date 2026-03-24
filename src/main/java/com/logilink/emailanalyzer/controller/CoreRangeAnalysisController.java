@@ -3,17 +3,15 @@ package com.logilink.emailanalyzer.controller;
 import com.logilink.emailanalyzer.model.ApiValidationError;
 import com.logilink.emailanalyzer.model.CoreRangeAnalysisRequest;
 import com.logilink.emailanalyzer.model.CoreRangeAnalysisResponse;
-import com.logilink.emailanalyzer.service.AppSettingsService;
 import com.logilink.emailanalyzer.service.CoreRangeAnalysisService;
 import jakarta.validation.Valid;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.validation.BindingResult;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -21,21 +19,22 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/core-test")
 @PreAuthorize("hasRole('ADMIN')")
 public class CoreRangeAnalysisController {
 
     private final CoreRangeAnalysisService coreRangeAnalysisService;
-    private final AppSettingsService appSettingsService;
 
-    public CoreRangeAnalysisController(
-            CoreRangeAnalysisService coreRangeAnalysisService,
-            AppSettingsService appSettingsService) {
+    public CoreRangeAnalysisController(CoreRangeAnalysisService coreRangeAnalysisService) {
         this.coreRangeAnalysisService = coreRangeAnalysisService;
-        this.appSettingsService = appSettingsService;
     }
 
-    @PostMapping(path = "/analyze-range", consumes = "application/json", produces = "application/json")
+    /**
+     * Date-range analysis: same handler for the legacy path and top-level {@code /analyze-range}.
+     */
+    @PostMapping(
+            path = {"/api/email-analyze"},
+            consumes = "application/json",
+            produces = "application/json")
     public ResponseEntity<?> analyzeRange(@Valid @RequestBody CoreRangeAnalysisRequest request, BindingResult bindingResult) {
         if (bindingResult.hasErrors()) {
             return ResponseEntity.badRequest().body(validationErrors(bindingResult));
@@ -51,11 +50,10 @@ public class CoreRangeAnalysisController {
         }
 
         try {
-            int maxEmailsFromSettings = appSettingsService.getRequiredSchedulerMaxEmails();
             CoreRangeAnalysisResponse response = coreRangeAnalysisService.analyzeByDateRange(
                     request.getStartDate(),
                     request.getEndDate(),
-                    maxEmailsFromSettings
+                    request.getMaxEmails()
             );
             return ResponseEntity.ok(response);
         } catch (Exception e) {

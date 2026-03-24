@@ -46,7 +46,6 @@ public class JobProgressController {
                 active.getMailUsername(),
                 active.getLlmModel(),
                 active.getLlmUrl(),
-                active.getSchedulerCron(),
                 active.getSchedulerDateRangeDays(),
                 active.getSchedulerMaxEmails()
         );
@@ -60,7 +59,6 @@ public class JobProgressController {
             String mailUsername,
             String llmModel,
             String llmUrl,
-            String schedulerCron,
             Integer schedulerDateRangeDays,
             Integer schedulerMaxEmails
     ) {

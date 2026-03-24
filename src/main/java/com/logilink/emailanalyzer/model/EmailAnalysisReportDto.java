@@ -14,6 +14,7 @@ import java.util.List;
 public class EmailAnalysisReportDto {
 
     private String emailId;
+    private Long settingId;
     private LocalDateTime emailDate;
     private LocalDateTime processedAt;
     private String subject;

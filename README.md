@@ -32,7 +32,14 @@ Spring Boot web application that reads emails, runs AI-assisted analysis (via Ol
 
 ## Configuration
 
-The app reads configuration from `src/main/resources/application.yml` and environment variables.
+The app reads configuration from profile-based files under `src/main/resources`:
+
+- `application.yml` -> shared defaults
+- `application-local.yml` -> local defaults (default active profile)
+- `application-dev.yml` -> development defaults
+- `application-prod.yml` -> production defaults
+
+Active profile can be selected with `SPRING_PROFILES_ACTIVE` (`local`, `dev`, or `prod`).
 
 ### Required / Common environment variables
 
@@ -64,6 +71,12 @@ EMAIL_IMAP_SSL_TRUST=*
 
 ```bash
 mvn clean spring-boot:run
+```
+
+Run with a specific profile:
+
+```bash
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
 Application URL:

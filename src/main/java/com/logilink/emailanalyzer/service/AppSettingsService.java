@@ -14,7 +14,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Sort;
-import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,22 +30,28 @@ import java.util.Properties;
 @Service
 public class AppSettingsService {
 
-  private static final Logger log = LoggerFactory.getLogger(AppSettingsService.class);
-  private static final String SMTP_PREFIX = "smtp.";
-  private static final String IMAP_PREFIX = "imap.";
+    private static final Logger log = LoggerFactory.getLogger(AppSettingsService.class);
+    private static final String SMTP_PREFIX = "smtp.";
+    private static final String IMAP_PREFIX = "imap.";
 
-  private final AppSettingsRepository repository;
-  private final int aiTestConnectTimeoutSeconds;
-  private final int aiTestRequestTimeoutSeconds;
+    private final AppSettingsRepository repository;
+    private final int aiTestConnectTimeoutSeconds;
+    private final int aiTestRequestTimeoutSeconds;
+    private final int defaultAnalysisDateRangeDays;
+    private final int defaultAnalysisMaxEmails;
 
     public AppSettingsService(
             AppSettingsRepository repository,
             @Value("${ai.test.connect-timeout-seconds:10}") int aiTestConnectTimeoutSeconds,
-            @Value("${ai.test.request-timeout-seconds:75}") int aiTestRequestTimeoutSeconds
+            @Value("${ai.test.request-timeout-seconds:75}") int aiTestRequestTimeoutSeconds,
+            @Value("${email.analysis.default-date-range-days:1}") int defaultAnalysisDateRangeDays,
+            @Value("${email.analysis.default-max-emails:1000}") int defaultAnalysisMaxEmails
     ) {
         this.repository = repository;
         this.aiTestConnectTimeoutSeconds = aiTestConnectTimeoutSeconds;
         this.aiTestRequestTimeoutSeconds = aiTestRequestTimeoutSeconds;
+        this.defaultAnalysisDateRangeDays = defaultAnalysisDateRangeDays;
+        this.defaultAnalysisMaxEmails = defaultAnalysisMaxEmails;
     }
 
     @Transactional
@@ -89,7 +94,7 @@ public class AppSettingsService {
                 .llmUrl(source.getLlmUrl())
                 .llmTemperature(source.getLlmTemperature())
                 .schedulerEnabled(Boolean.FALSE)
-                .schedulerCron(source.getSchedulerCron())
+                .schedulerCron("")
                 .schedulerDateRangeDays(source.getSchedulerDateRangeDays())
                 .schedulerMaxEmails(source.getSchedulerMaxEmails())
                 .active(Boolean.FALSE)
@@ -114,8 +119,8 @@ public class AppSettingsService {
                 .llmTemperature(null)
                 .schedulerEnabled(Boolean.FALSE)
                 .schedulerCron("")
-                .schedulerDateRangeDays(null)
-                .schedulerMaxEmails(null)
+                .schedulerDateRangeDays(defaultAnalysisDateRangeDays)
+                .schedulerMaxEmails(defaultAnalysisMaxEmails)
                 .active(Boolean.FALSE)
                 .build();
         return repository.save(created);
@@ -159,15 +164,12 @@ public class AppSettingsService {
         String llmModel = trim(form.getLlmModel());
         String llmUrl = trim(form.getLlmUrl());
         Double llmTemperature = form.getLlmTemperature();
-        Boolean schedulerEnabled = form.getSchedulerEnabled();
-        String schedulerCron = trim(form.getSchedulerCron());
         Integer schedulerDateRangeDays = form.getSchedulerDateRangeDays();
         Integer schedulerMaxEmails = form.getSchedulerMaxEmails();
         Boolean active = form.getActive();
 
-        validateCron(schedulerCron);
-        validatePositive("Date range days", schedulerDateRangeDays);
-        validatePositive("Max emails", schedulerMaxEmails);
+        validateRequiredPositive("Date range days", schedulerDateRangeDays);
+        validateRequiredPositive("Max emails", schedulerMaxEmails);
         validateProfileStatusChange(settings, active);
 
         if (same(settings.getMailHost(), mailHost)
@@ -179,8 +181,6 @@ public class AppSettingsService {
                 && same(settings.getLlmModel(), llmModel)
                 && same(settings.getLlmUrl(), llmUrl)
                 && same(settings.getLlmTemperature(), llmTemperature)
-                && same(settings.getSchedulerEnabled(), schedulerEnabled)
-                && same(settings.getSchedulerCron(), schedulerCron)
                 && same(settings.getSchedulerDateRangeDays(), schedulerDateRangeDays)
                 && same(settings.getSchedulerMaxEmails(), schedulerMaxEmails)
                 && same(settings.getActive(), active)) {
@@ -197,8 +197,6 @@ public class AppSettingsService {
         settings.setLlmModel(llmModel);
         settings.setLlmUrl(llmUrl);
         settings.setLlmTemperature(llmTemperature);
-        settings.setSchedulerEnabled(schedulerEnabled);
-        settings.setSchedulerCron(schedulerCron);
         settings.setSchedulerDateRangeDays(schedulerDateRangeDays);
         settings.setSchedulerMaxEmails(schedulerMaxEmails);
         applyProfileActiveState(settings, active);
@@ -238,8 +236,8 @@ public class AppSettingsService {
         }
 
         String smtpHost = host.startsWith(IMAP_PREFIX)
-            ? SMTP_PREFIX + host.substring(IMAP_PREFIX.length())
-            : host;
+                ? SMTP_PREFIX + host.substring(IMAP_PREFIX.length())
+                : host;
         int smtpPort = (port == 993) ? (Boolean.TRUE.equals(sslEnabled) ? 465 : 587) : port;
 
         try {
@@ -320,31 +318,6 @@ public class AppSettingsService {
         }
     }
 
-    @Transactional
-    public void updateSchedulerEnabled(boolean enabled) {
-        AppSettings settings = getOrCreate();
-        settings.setSchedulerEnabled(enabled);
-        repository.save(settings);
-    }
-
-    @Transactional
-    public void updateSchedulerCron(String cron) {
-        String normalized = trim(cron);
-        validateCron(normalized);
-        AppSettings settings = getOrCreate();
-        settings.setSchedulerCron(normalized);
-        repository.save(settings);
-    }
-
-    @Transactional(readOnly = true)
-    public String getRequiredSchedulerCron() {
-        String cron = getActiveRequiredSettings().getSchedulerCron();
-        if (isBlank(cron)) {
-            throw new EmailAnalysisException("Scheduler cron is missing in settings.");
-        }
-        return cron;
-    }
-
     @Transactional(readOnly = true)
     public int getRequiredSchedulerDateRangeDays() {
         Integer dateRangeDays = getActiveRequiredSettings().getSchedulerDateRangeDays();
@@ -376,8 +349,8 @@ public class AppSettingsService {
                 .llmTemperature(null)
                 .schedulerEnabled(Boolean.FALSE)
                 .schedulerCron("")
-                .schedulerDateRangeDays(null)
-                .schedulerMaxEmails(null)
+                .schedulerDateRangeDays(defaultAnalysisDateRangeDays)
+                .schedulerMaxEmails(defaultAnalysisMaxEmails)
                 .active(Boolean.TRUE)
                 .build();
         return repository.save(defaults);
@@ -424,20 +397,9 @@ public class AppSettingsService {
         return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
-    private static void validateCron(String cron) {
-        if (isBlank(cron)) {
-            throw new EmailAnalysisException(AppConstants.Messages.CRON_REQUIRED);
-        }
-        try {
-            CronExpression.parse(cron);
-        } catch (Exception ex) {
-            throw new EmailAnalysisException(AppConstants.Messages.CRON_INVALID, ex);
-        }
-    }
-
-    private static void validatePositive(String fieldName, Integer value) {
-        if (value != null && value <= 0) {
-            throw new EmailAnalysisException(fieldName + " must be greater than 0.");
+    private static void validateRequiredPositive(String fieldName, Integer value) {
+        if (value == null || value <= 0) {
+            throw new EmailAnalysisException(fieldName + " must be a positive number.");
         }
     }
 

@@ -11,6 +11,7 @@ import java.util.Optional;
 @Repository
 public interface AppSettingsRepository extends JpaRepository<AppSettings, Long> {
     Optional<AppSettings> findFirstByActiveTrue();
+
     boolean existsByActiveTrueAndIdNot(Long id);
 
     @Modifying
