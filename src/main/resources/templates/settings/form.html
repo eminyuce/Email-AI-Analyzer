@@ -183,17 +183,27 @@
                             <div class="text-danger small mt-1" th:if="${#fields.hasErrors('schedulerMaxEmails')}"
                                  th:errors="*{schedulerMaxEmails}"></div>
                         </div>
-                        <div class="col-md-2 d-flex gap-2">
-                            <button type="button" id="btn-start-scheduler" class="btn btn-success w-100">
-                                <span id="start-scheduler-spinner" class="spinner-border spinner-border-sm d-none"
-                                      role="status"></span>
-                                Start
-                            </button>
-                            <button type="button" id="btn-stop-scheduler" class="btn btn-outline-danger w-100">
-                                <span id="stop-scheduler-spinner" class="spinner-border spinner-border-sm d-none"
-                                      role="status"></span>
-                                Stop
-                            </button>
+                        <div class="col-md-2 d-flex flex-column gap-2">
+                            <div class="d-flex gap-2">
+                                <button type="button" id="btn-start-scheduler" class="btn btn-success w-100" title="Start Cron Scheduler">
+                                    <span id="start-scheduler-spinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                                    Start Cron
+                                </button>
+                                <button type="button" id="btn-stop-scheduler" class="btn btn-outline-danger w-100" title="Stop Cron Scheduler">
+                                    <span id="stop-scheduler-spinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                                    Stop Cron
+                                </button>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="button" id="btn-run-now" class="btn btn-primary w-100" title="Run Analysis Now">
+                                    <span id="run-now-spinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                                    Run Now
+                                </button>
+                                <button type="button" id="btn-stop-analysis" class="btn btn-danger w-100" title="Stop Current Analysis">
+                                    <span id="stop-analysis-spinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                                    Stop Run
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -294,6 +304,14 @@
 
         document.getElementById('btn-stop-scheduler').addEventListener('click', function() {
             runSchedulerAction(/*[[@{/settings/scheduler/stop}]]*/ '/settings/scheduler/stop', 'btn-stop-scheduler', 'stop-scheduler-spinner');
+        });
+
+        document.getElementById('btn-run-now').addEventListener('click', function() {
+            runSchedulerAction(/*[[@{/settings/scheduler/run-now}]]*/ '/settings/scheduler/run-now', 'btn-run-now', 'run-now-spinner');
+        });
+
+        document.getElementById('btn-stop-analysis').addEventListener('click', function() {
+            runSchedulerAction(/*[[@{/settings/scheduler/stop-analysis}]]*/ '/settings/scheduler/stop-analysis', 'btn-stop-analysis', 'stop-analysis-spinner');
         });
     </script>
 </div>

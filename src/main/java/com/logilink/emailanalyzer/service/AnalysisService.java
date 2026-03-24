@@ -43,12 +43,10 @@ public class AnalysisService {
     this.jobProgressService = jobProgressService;
   }
 
-  @Transactional
   public List<EmailAnalysis> processEmails() {
     return processEmails(Integer.MAX_VALUE);
   }
 
-  @Transactional
   public List<EmailAnalysis> processEmails(int maxEmails) {
     return recordLatency("processEmails", () -> {
       if (maxEmails <= 0) {
@@ -59,7 +57,6 @@ public class AnalysisService {
     });
   }
 
-  @Transactional
   public List<EmailAnalysis> processEmails(int maxEmails, Date startDate, Date endDate) {
     return recordLatency("processEmailsByRange", () -> {
       if (maxEmails <= 0) {
@@ -98,6 +95,12 @@ public class AnalysisService {
         List<EmailAnalysis> processedAnalyses = new ArrayList<>();
 
         for (FetchedEmailDto email : emails) {
+            if (jobProgressService.isStopRequested()) {
+                log.info("Stop requested. Halting analysis process.");
+                jobProgressService.logSchedulerEvent("INFO", "Process stopped by manual user request.");
+                break;
+            }
+
             try {
                 String emailId = email.getEmailId();
 
@@ -136,7 +139,8 @@ public class AnalysisService {
         return processedAnalyses;
     }
 
-    private EmailAnalysis saveAnalysis(EmailAnalysisResult result) {
+    @Transactional
+    protected EmailAnalysis saveAnalysis(EmailAnalysisResult result) {
         EmailAnalysis entity = EmailAnalysis.builder()
                 .emailId(result.getEmailId())
                 .emailDate(result.getEmailDate())

@@ -45,7 +45,12 @@ public class EmailScheduler {
 
     @PostConstruct
     public void init() {
-        syncWithActiveSettings();
+        log.info("Initializing EmailScheduler...");
+        try {
+            syncWithActiveSettings();
+        } catch (Exception e) {
+            log.error("Failed to sync scheduler with active settings on startup: {}", e.getMessage());
+        }
     }
 
     @PreDestroy
@@ -80,16 +85,23 @@ public class EmailScheduler {
     }
 
     public synchronized void syncWithActiveSettings() {
-        boolean enabled = Boolean.TRUE.equals(appSettingsService.getOrCreate().getSchedulerEnabled());
+        var settings = appSettingsService.getOrCreate();
+        boolean enabled = Boolean.TRUE.equals(settings.getSchedulerEnabled());
+        String cron = settings.getSchedulerCron();
+        
         if (!enabled) {
             cancelCurrentTask();
             running = false;
-            currentCron = appSettingsService.getOrCreate().getSchedulerCron();
+            currentCron = cron;
+            log.info("Scheduler is disabled in active settings.");
             jobProgressService.logSchedulerEvent("INFO", "Scheduler is disabled in active settings; cron job not started.");
             return;
         }
+
         try {
-            String cron = appSettingsService.getRequiredSchedulerCron();
+            if (cron == null || cron.isBlank()) {
+                throw new IllegalStateException("Cron expression is empty");
+            }
             appSettingsService.getRequiredSchedulerDateRangeDays();
             appSettingsService.getRequiredSchedulerMaxEmails();
             startInternal(cron);
@@ -107,7 +119,17 @@ public class EmailScheduler {
         running = false;
         appSettingsService.updateSchedulerEnabled(false);
         log.info("Email processing scheduler stopped.");
-        jobProgressService.logSchedulerEvent("INFO", "Scheduler stopped.");
+        jobProgressService.logSchedulerEvent("INFO", "Scheduler (cron) stopped.");
+    }
+
+    public void runNow() {
+        log.info("Manual execution of email analysis requested.");
+        taskScheduler.execute(this::runScheduledJob);
+    }
+
+    public void stopCurrentAnalysis() {
+        log.info("Manual stop of current email analysis requested.");
+        jobProgressService.requestStop();
     }
 
     public synchronized void applyCron(String cron) {
@@ -131,22 +153,32 @@ public class EmailScheduler {
     }
 
     private void runScheduledJob() {
-        log.info("Starting scheduled email analysis job...");
-        jobProgressService.logSchedulerEvent("INFO", "Cron trigger fired. Starting scheduled email processing.");
+        if (jobProgressService.snapshot(0).status() == JobProgressService.JobStatus.RUNNING) {
+            log.warn("An analysis job is already running. Skipping this trigger.");
+            jobProgressService.logSchedulerEvent("WARN", "Trigger skipped because an analysis is already in progress.");
+            return;
+        }
+
+        log.info("Starting email analysis job...");
         try {
             int maxEmails = appSettingsService.getRequiredSchedulerMaxEmails();
             int dateRangeDays = appSettingsService.getRequiredSchedulerDateRangeDays();
             String cron = getCurrentCron();
-            jobProgressService.startRun(cron, maxEmails, dateRangeDays);
+            jobProgressService.startRun(cron != null ? cron : "MANUAL", maxEmails, dateRangeDays);
 
             Date endDate = Date.from(Instant.now());
             Date startDate = Date.from(Instant.now().minus(dateRangeDays, ChronoUnit.DAYS));
             int processedCount = analysisService.processEmails(maxEmails, startDate, endDate).size();
-            jobProgressService.completeRun("Scheduled job finished. Processed emails: " + processedCount + ".");
+            
+            if (jobProgressService.isStopRequested()) {
+                jobProgressService.completeRun("Analysis stopped by user. Processed emails: " + processedCount + ".");
+            } else {
+                jobProgressService.completeRun("Analysis finished. Processed emails: " + processedCount + ".");
+            }
         } catch (Exception e) {
-            log.error("Error in scheduled email analysis: {}", e.getMessage());
-            jobProgressService.logSchedulerEvent("ERROR", "Scheduled email processing failed: " + e.getMessage());
-            jobProgressService.failRun("Scheduled job failed: " + e.getMessage());
+            log.error("Error in email analysis: {}", e.getMessage());
+            jobProgressService.logSchedulerEvent("ERROR", "Email processing failed: " + e.getMessage());
+            jobProgressService.failRun("Job failed: " + e.getMessage());
         }
     }
 

@@ -135,21 +135,23 @@ public class SettingsController {
     @ResponseBody
     public ResponseEntity<SchedulerControlResponse> startScheduler(@ModelAttribute SettingsForm form) {
         try {
+            // If the user provided a cron on the form, update the active profile's cron.
             if (form.getSchedulerCron() != null && !form.getSchedulerCron().isBlank()) {
                 appSettingsService.updateSchedulerCron(form.getSchedulerCron());
                 emailScheduler.applyCron(form.getSchedulerCron());
             }
             emailScheduler.startWithCurrentSettings();
+            
             SchedulerControlResponse response = new SchedulerControlResponse();
             response.setSuccess(true);
             response.setRunning(emailScheduler.isRunning());
-            response.setMessage("Email processing started.");
+            response.setMessage("Scheduler (cron) started.");
             return ResponseEntity.ok(response);
         } catch (Exception ex) {
             SchedulerControlResponse response = new SchedulerControlResponse();
             response.setSuccess(false);
             response.setRunning(emailScheduler.isRunning());
-            response.setMessage("Email processing could not be started: " + ex.getMessage());
+            response.setMessage("Scheduler could not be started: " + ex.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
     }
@@ -161,7 +163,29 @@ public class SettingsController {
         SchedulerControlResponse response = new SchedulerControlResponse();
         response.setSuccess(true);
         response.setRunning(emailScheduler.isRunning());
-        response.setMessage("Email processing stopped.");
+        response.setMessage("Scheduler (cron) stopped.");
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/scheduler/run-now")
+    @ResponseBody
+    public ResponseEntity<SchedulerControlResponse> runNow() {
+        emailScheduler.runNow();
+        SchedulerControlResponse response = new SchedulerControlResponse();
+        response.setSuccess(true);
+        response.setRunning(emailScheduler.isRunning());
+        response.setMessage("Manual email analysis started.");
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/scheduler/stop-analysis")
+    @ResponseBody
+    public ResponseEntity<SchedulerControlResponse> stopAnalysis() {
+        emailScheduler.stopCurrentAnalysis();
+        SchedulerControlResponse response = new SchedulerControlResponse();
+        response.setSuccess(true);
+        response.setRunning(emailScheduler.isRunning());
+        response.setMessage("Stop request sent to analysis process.");
         return ResponseEntity.ok(response);
     }
 

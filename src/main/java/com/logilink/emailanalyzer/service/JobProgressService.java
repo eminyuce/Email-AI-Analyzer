@@ -45,6 +45,7 @@ public class JobProgressService {
     private final Deque<ProgressLogEntry> logs = new ConcurrentLinkedDeque<>();
 
     private volatile JobStatus status = JobStatus.IDLE;
+    private volatile boolean stopRequested = false;
     private volatile String schedulerCron = "";
     private volatile Instant startedAt;
     private volatile Instant completedAt;
@@ -57,6 +58,7 @@ public class JobProgressService {
 
     public synchronized void startRun(String cron, int maxEmails, int rangeDays) {
         status = JobStatus.RUNNING;
+        stopRequested = false;
         schedulerCron = cron;
         startedAt = Instant.now();
         completedAt = null;
@@ -66,7 +68,18 @@ public class JobProgressService {
         processedCount = 0;
         skippedCount = 0;
         errorCount = 0;
-        append("INFO", "RUNNING", "Scheduled job started.");
+        append("INFO", "RUNNING", "Analysis job started.");
+    }
+
+    public synchronized void requestStop() {
+        if (status == JobStatus.RUNNING) {
+            stopRequested = true;
+            append("WARN", "STOPPING", "Stop requested by user. Finalizing current email and stopping...");
+        }
+    }
+
+    public boolean isStopRequested() {
+        return stopRequested;
     }
 
     public synchronized void setTotalCandidates(int total) {
