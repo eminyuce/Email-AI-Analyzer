@@ -101,7 +101,7 @@
         <div class="col-md-6">
             <div class="card h-100">
                 <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0"><i class="bi bi-cpu me-2"></i>LLM Model (Ollama)</h5>
+                    <h5 class="mb-0"><i class="bi bi-cpu me-2"></i>LLM (Ollama or Groq)</h5>
                     <button type="button" id="btn-test-ai" class="btn btn-sm btn-outline-secondary">
                         <span id="ai-spinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
                         Test AI Chat
@@ -110,14 +110,26 @@
                 <div class="card-body">
                     <div class="row g-3">
                         <div class="col-md-12">
-                            <label for="llmUrl" class="form-label">Endpoint URL</label>
+                            <label for="llmProvider" class="form-label">Provider</label>
+                            <select id="llmProvider" class="form-select" th:field="*{llmProvider}">
+                                <option value="ollama">Ollama (local / self-hosted)</option>
+                                <option value="groq">Groq (cloud; API key from GROQ_API_KEY)</option>
+                            </select>
+                            <div class="text-danger small mt-1" th:if="${#fields.hasErrors('llmProvider')}"
+                                 th:errors="*{llmProvider}"></div>
+                        </div>
+                        <div class="col-md-12">
+                            <label for="llmUrl" class="form-label">Ollama endpoint URL</label>
                             <input id="llmUrl" type="text" class="form-control" th:field="*{llmUrl}"
                                    placeholder="http://localhost:11434">
+                            <div class="form-text" id="llmUrlHint">Required for Ollama. Ignored when using Groq (base URL
+                                comes from <code>groq.api.url</code>).
+                            </div>
                         </div>
                         <div class="col-md-8">
-                            <label for="llmModel" class="form-label">Model Name</label>
+                            <label for="llmModel" class="form-label">Model name</label>
                             <input id="llmModel" type="text" class="form-control" th:field="*{llmModel}"
-                                   placeholder="llama3.2">
+                                   placeholder="e.g. llama3.2 or llama3-70b-8192 (Groq)">
                         </div>
                         <div class="col-md-4">
                             <label for="llmTemperature" class="form-label">Temperature</label>
@@ -284,6 +296,21 @@
         document.getElementById('btn-stop-analysis').addEventListener('click', function() {
             runSchedulerAction(/*[[@{/settings/scheduler/stop-analysis}]]*/ '/settings/scheduler/stop-analysis', 'btn-stop-analysis', 'stop-analysis-spinner');
         });
+
+        function syncLlmUrlHint() {
+            const prov = document.getElementById('llmProvider');
+            const hint = document.getElementById('llmUrlHint');
+            if (!prov || !hint) {
+                return;
+            }
+            const isGroq = prov.value === 'groq';
+            hint.textContent = isGroq
+                ? 'Not used for Groq (requests use groq.api.url and GROQ_API_KEY).'
+                : 'Required for Ollama. Ignored when using Groq (base URL comes from application configuration).';
+        }
+
+        document.getElementById('llmProvider').addEventListener('change', syncLlmUrlHint);
+        syncLlmUrlHint();
     </script>
 </div>
 </body>

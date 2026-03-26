@@ -154,6 +154,7 @@ public class SettingsController {
     @ResponseBody
     public ResponseEntity<ConnectionTestResponse> testAi(@ModelAttribute SettingsForm form) {
         AppSettingsService.TestEndpointResult result = appSettingsService.testAiChatConnectionDetailed(
+                form.getLlmProvider(),
                 form.getLlmUrl(),
                 form.getLlmModel(),
                 form.getLlmTemperature()

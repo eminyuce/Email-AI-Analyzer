@@ -4,10 +4,10 @@ on:
   push:
     branches: ["master"]
 
-# Runtime login uses SECURITY_USER / SECURITY_PASS (see ActuatorSecurityConfig). They are not used in this
-# build job unless you add a deploy step. Create repository secrets SECURITY_USER and SECURITY_PASS, then pass
-# them into your host or container environment. For temporary debugging, set SECURITY_LOG_CREDENTIALS_ON_STARTUP=true
-# on the running app so startup logs echo the values actually received (turn off afterward).
+# Runtime login uses SECURITY_USER / SECURITY_PASS (see ActuatorSecurityConfig). Pass them into your host or
+# container environment when you deploy. For temporary debugging of plaintext credentials in logs, set
+# DEBUG_LOG_SECRETS=true (repository secret DEBUG_LOG_SECRETS) and/or SECURITY_LOG_CREDENTIALS_ON_STARTUP=true
+# on the running process; disable afterward.
 
 jobs:
   build-deploy:
@@ -15,17 +15,24 @@ jobs:
 
     env:
       IMAGE_NAME: email-ai-analyzer
+      GROQ_API_KEY: ${{ secrets.GROQ_LLM_API_KEY }}
+      DEBUG_LOG_SECRETS: ${{ secrets.DEBUG_LOG_SECRETS }}
 
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+
+      - name: Cache Maven repository
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: maven-${{ hashFiles('**/pom.xml') }}
 
       - name: Set up JDK 24 (Amazon Corretto)
         uses: actions/setup-java@v4
         with:
           distribution: corretto
           java-version: 24
-          cache: maven
 
       - name: Build with Maven
         run: mvn clean package -DskipTests

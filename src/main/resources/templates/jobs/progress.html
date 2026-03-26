@@ -30,6 +30,7 @@
                 <div class="col-md-3"><strong>Mail Host:</strong> <span id="activeMailHost">-</span></div>
                 <div class="col-md-3"><strong>Mail Port:</strong> <span id="activeMailPort">-</span></div>
                 <div class="col-md-3"><strong>Mail Username:</strong> <span id="activeMailUsername">-</span></div>
+                <div class="col-md-3"><strong>LLM provider:</strong> <span id="activeLlmProvider">-</span></div>
                 <div class="col-md-3"><strong>LLM Model:</strong> <span id="activeLlmModel">-</span></div>
                 <div class="col-md-3"><strong>LLM URL:</strong> <span id="activeLlmUrl">-</span></div>
                 <div class="col-md-3"><strong>Trigger:</strong> <span id="activeTriggerMode">Manual (REST/UI)</span>
@@ -130,6 +131,7 @@
         const activeMailHost = document.getElementById('activeMailHost');
         const activeMailPort = document.getElementById('activeMailPort');
         const activeMailUsername = document.getElementById('activeMailUsername');
+        const activeLlmProvider = document.getElementById('activeLlmProvider');
         const activeLlmModel = document.getElementById('activeLlmModel');
         const activeLlmUrl = document.getElementById('activeLlmUrl');
         const activeRangeAndMax = document.getElementById('activeRangeAndMax');
@@ -159,8 +161,12 @@
             activeMailHost.textContent = settings.mailHost || '-';
             activeMailPort.textContent = settings.mailPort ?? '-';
             activeMailUsername.textContent = settings.mailUsername || '-';
+            activeLlmProvider.textContent = settings.llmProvider || 'ollama';
             activeLlmModel.textContent = settings.llmModel || '-';
-            activeLlmUrl.textContent = settings.llmUrl || '-';
+            activeLlmUrl.textContent =
+                (settings.llmProvider && settings.llmProvider.toLowerCase() === 'groq')
+                    ? '(Groq cloud)'
+                    : (settings.llmUrl || '-');
             const days = settings.schedulerDateRangeDays ?? '-';
             const max = settings.schedulerMaxEmails ?? '-';
             activeRangeAndMax.textContent = days + ' / ' + max;

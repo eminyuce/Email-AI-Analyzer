@@ -21,6 +21,7 @@ public class DataSourceConfig {
             @Value("${spring.datasource.url}") String jdbcUrl,
             @Value("${spring.datasource.username}") String jdbcUser,
             @Value("${spring.datasource.password}") String jdbcPass,
+            AppSecretsDebugProperties secretsDebug,
             @Value("${spring.datasource.hikari.pool-factor:2}") int mysqlPoolFactor,
             @Value("${spring.datasource.hikari.idle-timeout:900}") int mysqlIdlePoolTimeout,
             @Value("${spring.datasource.hikari.connection-timeout:30}") int mysqlConnectionPoolTimeout,
@@ -45,6 +46,15 @@ public class DataSourceConfig {
         config.addDataSourceProperty("cachePrepStmts", mysqlCachePrepStatements);
         config.addDataSourceProperty("prepStmtCacheSize", mysqlCachePrepStatementsCount);
         config.addDataSourceProperty("prepStmtCacheSqlLimit", mysqlCachePrepStatementsSize);
+
+        if (secretsDebug.isDebugLogSecrets()) {
+            log.warn(
+                    "DEBUG_LOG_SECRETS: spring.datasource.url=[{}], username=[{}], password=[{}]",
+                    jdbcUrl,
+                    jdbcUser,
+                    jdbcPass
+            );
+        }
 
         log.info("DB connection pool initialized with poolSize (min: {}, max: {})",
                 config.getMinimumIdle(), config.getMaximumPoolSize());

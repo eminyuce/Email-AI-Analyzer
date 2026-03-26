@@ -1,9 +1,11 @@
 package com.logilink.emailanalyzer.model;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -35,10 +37,13 @@ public class SettingsForm {
     @NotBlank(message = "System prompt is required")
     private String systemPrompt;
 
+    @NotBlank(message = "LLM provider is required")
+    @Pattern(regexp = "(?i)ollama|groq", message = "LLM provider must be ollama or groq")
+    private String llmProvider = "ollama";
+
     @NotBlank(message = "LLM model is required")
     private String llmModel;
 
-    @NotBlank(message = "LLM URL is required")
     private String llmUrl;
 
     @NotNull(message = "LLM temperature is required")
@@ -54,4 +59,15 @@ public class SettingsForm {
 
     @NotNull(message = "Profile status is required")
     private Boolean active;
+
+    @AssertTrue(message = "LLM URL is required when using Ollama")
+    public boolean isLlmUrlValidForProvider() {
+        if (llmProvider == null) {
+            return true;
+        }
+        if ("groq".equalsIgnoreCase(llmProvider)) {
+            return true;
+        }
+        return llmUrl != null && !llmUrl.isBlank();
+    }
 }

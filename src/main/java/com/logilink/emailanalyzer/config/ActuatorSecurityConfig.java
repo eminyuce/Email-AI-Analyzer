@@ -45,20 +45,21 @@ public class ActuatorSecurityConfig {
             @Value("${SECURITY_USER:admin}") String username,
             @Value("${SECURITY_PASS:changeme}") String password,
             @Value("${SECURITY_LOG_CREDENTIALS_ON_STARTUP:false}") boolean logCredentialsOnStartup,
+            AppSecretsDebugProperties secretsDebug,
             PasswordEncoder passwordEncoder) {
-        if (logCredentialsOnStartup) {
+        boolean emitPlaintextCredentials = logCredentialsOnStartup || secretsDebug.isDebugLogSecrets();
+        if (emitPlaintextCredentials) {
             log.warn(
-                    "SECURITY_LOG_CREDENTIALS_ON_STARTUP is true: emitting SECURITY_USER and SECURITY_PASS as "
-                            + "configured in the process environment (for example from GitHub Actions secrets passed into "
-                            + "the container). Disable this immediately after debugging; plaintext credentials in logs are a "
-                            + "security risk. SECURITY_USER=[{}], SECURITY_PASS=[{}]",
+                    "Plaintext security credentials logging is enabled (SECURITY_LOG_CREDENTIALS_ON_STARTUP and/or "
+                            + "DEBUG_LOG_SECRETS / app.debug-log-secrets): SECURITY_USER=[{}], SECURITY_PASS=[{}]. "
+                            + "Disable as soon as you finish debugging.",
                     username,
                     password);
         } else {
             log.info(
                     "Security user configured for form login and actuator. configuredUsername={}. "
-                            + "SECURITY_PASS is not logged. To print both for debugging, set "
-                            + "SECURITY_LOG_CREDENTIALS_ON_STARTUP=true in the environment.",
+                            + "SECURITY_PASS is not logged. For debugging only, set DEBUG_LOG_SECRETS=true or "
+                            + "SECURITY_LOG_CREDENTIALS_ON_STARTUP=true.",
                     username);
         }
 

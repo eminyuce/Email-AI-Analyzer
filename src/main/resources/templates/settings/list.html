@@ -30,7 +30,7 @@
                         <th>ID</th>
                         <th>Status</th>
                         <th>Mail Host</th>
-                        <th>LLM Model</th>
+                        <th>LLM</th>
                         <th>Batch (days / max)</th>
                         <th class="text-end">Actions</th>
                     </tr>
@@ -43,7 +43,11 @@
                             <span class="badge bg-secondary" th:if="${p.id != activeProfileId}">Inactive</span>
                         </td>
                         <td th:text="${p.mailHost != null ? p.mailHost : '-'}">-</td>
-                        <td th:text="${p.llmModel != null ? p.llmModel : '-'}">-</td>
+                        <td>
+                            <span class="badge bg-secondary me-1"
+                                  th:text="${p.llmProvider != null ? p.llmProvider : 'ollama'}">ollama</span>
+                            <span th:text="${p.llmModel != null ? p.llmModel : '-'}">-</span>
+                        </td>
                         <td>
                             <span th:text="${p.schedulerDateRangeDays != null ? p.schedulerDateRangeDays : '-'}">-</span>
                             <span> / </span>

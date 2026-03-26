@@ -52,6 +52,9 @@ public class AppSettings {
     @Column(name = "db_password")
     private String dbPassword;
 
+    @Column(name = "llm_provider")
+    private String llmProvider;
+
     @Column(name = "llm_model")
     private String llmModel;
 

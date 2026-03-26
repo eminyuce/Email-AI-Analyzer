@@ -1,8 +1,10 @@
 package com.logilink.emailanalyzer.service;
 
 import com.logilink.emailanalyzer.common.AppConstants;
+import com.logilink.emailanalyzer.common.LlmProviderType;
 import com.logilink.emailanalyzer.domain.AppSettings;
 import com.logilink.emailanalyzer.exception.EmailAnalysisException;
+import com.logilink.emailanalyzer.model.GroqRequest;
 import com.logilink.emailanalyzer.model.SettingsForm;
 import com.logilink.emailanalyzer.repository.AppSettingsRepository;
 import jakarta.mail.Session;
@@ -35,19 +37,25 @@ public class AppSettingsService {
     private static final String IMAP_PREFIX = "imap.";
 
     private final AppSettingsRepository repository;
+    private final GroqService groqService;
     private final int aiTestConnectTimeoutSeconds;
     private final int aiTestRequestTimeoutSeconds;
     private final int defaultAnalysisDateRangeDays;
     private final int defaultAnalysisMaxEmails;
 
+    @Value("${groq.api.key:}")
+    private String groqApiKey;
+
     public AppSettingsService(
             AppSettingsRepository repository,
+            GroqService groqService,
             @Value("${ai.test.connect-timeout-seconds:10}") int aiTestConnectTimeoutSeconds,
             @Value("${ai.test.request-timeout-seconds:75}") int aiTestRequestTimeoutSeconds,
             @Value("${email.analysis.default-date-range-days:1}") int defaultAnalysisDateRangeDays,
             @Value("${email.analysis.default-max-emails:1000}") int defaultAnalysisMaxEmails
     ) {
         this.repository = repository;
+        this.groqService = groqService;
         this.aiTestConnectTimeoutSeconds = aiTestConnectTimeoutSeconds;
         this.aiTestRequestTimeoutSeconds = aiTestRequestTimeoutSeconds;
         this.defaultAnalysisDateRangeDays = defaultAnalysisDateRangeDays;
@@ -90,6 +98,7 @@ public class AppSettingsService {
                 .dbName(source.getDbName())
                 .dbUsername(source.getDbUsername())
                 .dbPassword(source.getDbPassword())
+                .llmProvider(normalizeLlmProvider(source.getLlmProvider()))
                 .llmModel(source.getLlmModel())
                 .llmUrl(source.getLlmUrl())
                 .llmTemperature(source.getLlmTemperature())
@@ -114,6 +123,7 @@ public class AppSettingsService {
                 .mailPassword("")
                 .mailSslEnabled(null)
                 .systemPrompt("")
+                .llmProvider(LlmProviderType.OLLAMA.toSettingsValue())
                 .llmModel("")
                 .llmUrl("")
                 .llmTemperature(null)
@@ -161,6 +171,7 @@ public class AppSettingsService {
         String mailPassword = form.getMailPassword();
         Boolean mailSslEnabled = form.getMailSslEnabled();
         String systemPrompt = trim(form.getSystemPrompt());
+        String llmProvider = normalizeLlmProvider(form.getLlmProvider());
         String llmModel = trim(form.getLlmModel());
         String llmUrl = trim(form.getLlmUrl());
         Double llmTemperature = form.getLlmTemperature();
@@ -178,6 +189,7 @@ public class AppSettingsService {
                 && same(settings.getMailPassword(), mailPassword)
                 && same(settings.getMailSslEnabled(), mailSslEnabled)
                 && same(settings.getSystemPrompt(), systemPrompt)
+                && same(settings.getLlmProvider(), llmProvider)
                 && same(settings.getLlmModel(), llmModel)
                 && same(settings.getLlmUrl(), llmUrl)
                 && same(settings.getLlmTemperature(), llmTemperature)
@@ -194,6 +206,7 @@ public class AppSettingsService {
         settings.setMailSslEnabled(mailSslEnabled);
         settings.setSystemPrompt(systemPrompt);
 
+        settings.setLlmProvider(llmProvider);
         settings.setLlmModel(llmModel);
         settings.setLlmUrl(llmUrl);
         settings.setLlmTemperature(llmTemperature);
@@ -268,13 +281,20 @@ public class AppSettingsService {
         }
     }
 
-    public boolean testAiChatConnection(String llmUrl, String llmModel, Double llmTemperature) {
-        return testAiChatConnectionDetailed(llmUrl, llmModel, llmTemperature).isSuccess();
+    public boolean testAiChatConnection(String llmProvider, String llmUrl, String llmModel, Double llmTemperature) {
+        return testAiChatConnectionDetailed(llmProvider, llmUrl, llmModel, llmTemperature).isSuccess();
     }
 
-    public TestEndpointResult testAiChatConnectionDetailed(String llmUrl, String llmModel, Double llmTemperature) {
+    public TestEndpointResult testAiChatConnectionDetailed(String llmProvider, String llmUrl, String llmModel, Double llmTemperature) {
+        if (LlmProviderType.fromSettingsValue(llmProvider) == LlmProviderType.GROQ) {
+            return testGroqChatConnectionDetailed(llmModel, llmTemperature);
+        }
+        return testOllamaChatConnectionDetailed(llmUrl, llmModel, llmTemperature);
+    }
+
+    private TestEndpointResult testOllamaChatConnectionDetailed(String llmUrl, String llmModel, Double llmTemperature) {
         if (isBlank(llmUrl) || isBlank(llmModel)) {
-            return TestEndpointResult.failure("Missing AI settings. llmUrl and llmModel are required.");
+            return TestEndpointResult.failure("Missing AI settings. llmUrl and llmModel are required for Ollama.");
         }
 
         String baseUrl = llmUrl.endsWith("/") ? llmUrl.substring(0, llmUrl.length() - 1) : llmUrl;
@@ -318,6 +338,36 @@ public class AppSettingsService {
         }
     }
 
+    private TestEndpointResult testGroqChatConnectionDetailed(String llmModel, Double llmTemperature) {
+        if (isBlank(llmModel)) {
+            return TestEndpointResult.failure("Missing AI settings. llmModel is required for Groq.");
+        }
+        if (isBlank(groqApiKey)) {
+            return TestEndpointResult.failure("Groq API key is not configured. Set GROQ_API_KEY or groq.api.key.");
+        }
+        double temperature = llmTemperature != null ? llmTemperature : 0.3;
+        try {
+            long startedAt = System.currentTimeMillis();
+            String reply = groqService.chat(
+                    llmModel,
+                    List.of(new GroqRequest.Message("user", "Reply with only OK")),
+                    temperature,
+                    32
+            );
+            long durationMs = System.currentTimeMillis() - startedAt;
+            if (reply == null || !reply.toLowerCase().contains("ok")) {
+                return TestEndpointResult.failure("Groq test unexpected response: " + reply);
+            }
+            return TestEndpointResult.success(
+                    "Groq chat test successful.",
+                    Map.of("model", llmModel, "durationMs", durationMs)
+            );
+        } catch (Exception e) {
+            log.error("Groq connection test failed: {}", e.getMessage());
+            return TestEndpointResult.failure("Groq chat test failed: " + e.getMessage());
+        }
+    }
+
     @Transactional(readOnly = true)
     public int getRequiredSchedulerDateRangeDays() {
         Integer dateRangeDays = getActiveRequiredSettings().getSchedulerDateRangeDays();
@@ -344,6 +394,7 @@ public class AppSettingsService {
                 .mailPassword("")
                 .mailSslEnabled(null)
                 .systemPrompt("")
+                .llmProvider(LlmProviderType.OLLAMA.toSettingsValue())
                 .llmModel("")
                 .llmUrl("")
                 .llmTemperature(null)
@@ -384,6 +435,10 @@ public class AppSettingsService {
 
     private static String trim(String value) {
         return StringUtils.trimToNull(value);
+    }
+
+    private static String normalizeLlmProvider(String value) {
+        return LlmProviderType.fromSettingsValue(value).toSettingsValue();
     }
 
     private static boolean isBlank(String value) {
