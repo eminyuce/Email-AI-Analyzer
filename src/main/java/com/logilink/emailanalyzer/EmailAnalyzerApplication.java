@@ -9,6 +9,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.io.ClassPathResource;
 
+import com.logilink.emailanalyzer.config.AppSecretsDebugProperties;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -24,7 +26,7 @@ public class EmailAnalyzerApplication {
     }
 
     @Bean
-    public CommandLineRunner commandLineRunner() {
+    public CommandLineRunner commandLineRunner(AppSecretsDebugProperties secretsDebug) {
         return args -> {
             log.info("✅ E-posta analizi başlatıldı – Ollama + 1080 Ti aktif");
 
@@ -44,9 +46,18 @@ public class EmailAnalyzerApplication {
             log.info("---- application.yml değerleri ----");
             System.out.println("---- application.yml değerleri ----");
 
+            boolean revealSecrets = secretsDebug.isDebugLogSecrets();
+            if (revealSecrets) {
+                log.warn(
+                        "app.debug-log-secrets is enabled: printing resolved application.yml entries including "
+                                + "sensitive keys. Disable DEBUG_LOG_SECRETS as soon as you finish troubleshooting."
+                );
+            }
+
             for (String key : keys) {
                 String value = properties.getProperty(key);
-                String safeValue = isSensitiveKey(key) ? "******" : Objects.toString(value, "");
+                boolean mask = !revealSecrets && isSensitiveKey(key);
+                String safeValue = mask ? "******" : Objects.toString(value, "");
                 String message = key + " = " + safeValue;
                 log.info(message);
                 System.out.println(message);
@@ -63,6 +74,7 @@ public class EmailAnalyzerApplication {
                 || lowerCase.contains("secret")
                 || lowerCase.contains("token")
                 || lowerCase.contains("api-key")
-                || lowerCase.contains("apikey");
+                || lowerCase.contains("apikey")
+                || lowerCase.contains("groq.api");
     }
 }
