@@ -6,6 +6,7 @@ import com.logilink.emailanalyzer.domain.AppSettings;
 import com.logilink.emailanalyzer.exception.EmailAnalysisException;
 import com.logilink.emailanalyzer.model.EmailAnalysisResult;
 import com.logilink.emailanalyzer.config.AppSecretsDebugProperties;
+import com.logilink.emailanalyzer.model.FetchedEmailDto; // Added import
 import com.logilink.emailanalyzer.model.GroqRequest;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
