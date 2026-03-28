@@ -11,6 +11,7 @@ import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
 import jakarta.mail.internet.MimeUtility;
 import jakarta.mail.search.*;
+import org.jsoup.Jsoup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -342,8 +343,9 @@ public class EmailService {
         if (part.isMimeType("text/plain")) {
             contentBuilder.append((String) part.getContent());
         } else if (part.isMimeType("text/html")) {
-            // Jsoup could be used here for cleaning, but for simplicity, we'll append as is.
-            contentBuilder.append((String) part.getContent());
+            String html = (String) part.getContent();
+            String text = Jsoup.parse(html).text();
+            contentBuilder.append(text);
         } else if (part.isMimeType("multipart/*")) {
             MimeMultipart mimeMultipart = (MimeMultipart) part.getContent();
             for (int i = 0; i < mimeMultipart.getCount(); i++) {
