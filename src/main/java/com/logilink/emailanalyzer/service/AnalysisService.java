@@ -93,77 +93,91 @@ public class AnalysisService {
     }
 
     private List<EmailAnalysis> processMessages(List<FetchedEmailDto> emails) {
-        log.info("Found {} emails to analyze.", emails.size());
-        jobProgressService.setTotalCandidates(emails.size());
-        List<EmailAnalysis> processedAnalyses = new ArrayList<>();
-
-        for (FetchedEmailDto email : emails) {
-            if (jobProgressService.isStopRequested()) {
-                log.info("Stop requested. Halting analysis process.");
-                jobProgressService.logSchedulerEvent("INFO", "Process stopped by manual user request.");
-                break;
-            }
-
-            try {
-                String emailId = email.getEmailId();
-
-                // Idempotency check
-                if (repository.existsById(emailId)) {
-                    log.info("Email {} already processed. Skipping.", emailId);
-                    jobProgressService.incrementSkipped("Email " + emailId + " already processed. Skipped.");
-                    continue;
-                }
-
-                String subject = email.getSubject();
-                String sender = email.getSenderLine();
-                String content = email.getContent() != null ? email.getContent() : "";
-
-                LocalDateTime emailDate = email.getEmailDate();
-
-                log.info("Analyzing email from: {}", sender);
-                log.debug("Preparing AI analysis for emailId={}, subject='{}', sender='{}', contentLength={}",
-                        emailId, subject, sender, content.length());
-
-                EmailAnalysisResult result = aiService.analyzeEmail(
-                        emailId,
-                        subject,
-                        sender,
-                        content,
-                        email.getInReplyTo(),
-                        email.getReferences(),
-                        email.getAttachments()
-                );
-                enrichResult(result, emailId, subject, sender, emailDate);
-
-                // Save to DB
-                EmailAnalysis savedAnalysis = saveAnalysis(result);
-                processedAnalyses.add(savedAnalysis);
-                jobProgressService.incrementProcessed(
-                        "Processed email " + emailId + " with score " + result.getCriticalityScore() + "."
-                );
-
-                log.info("Analysis Complete for email {}: Score {}", emailId, result.getCriticalityScore());
-
-            } catch (Exception e) {
-                String emailId = email.getEmailId();
-                String subject = email.getSubject();
-                String sender = email.getSenderLine();
-                String content = email.getContent() != null ? email.getContent() : "";
-                log.error(
-                        "Analysis error for emailId={}, subject='{}', sender='{}', contentLength={}: {}",
-                        emailId,
-                        subject,
-                        sender,
-                        content.length(),
-                        e.getMessage(),
-                        e
-                );
-                jobProgressService.incrementError(
-                        "Analysis error for emailId=" + emailId + ", subject='" + subject + "': " + e.getMessage()
-                );
-            }
+        if (emails.isEmpty()) {
+            log.info("No emails to analyze.");
+            return List.of();
         }
+
+        log.info("Starting analysis of {} emails using virtual threads.", emails.size());
+        jobProgressService.setTotalCandidates(emails.size());
+
+        int maxConcurrency = 10; // Limit concurrent AI requests to avoid rate limits
+        java.util.concurrent.Semaphore semaphore = new java.util.concurrent.Semaphore(maxConcurrency);
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor();
+
+        List<java.util.concurrent.CompletableFuture<EmailAnalysis>> futures = emails.stream()
+                .map(email -> java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                    if (jobProgressService.isStopRequested()) {
+                        return null;
+                    }
+
+                    try {
+                        semaphore.acquire();
+                        try {
+                            return analyzeSingleEmail(email);
+                        } finally {
+                            semaphore.release();
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return null;
+                    }
+                }, executor))
+                .toList();
+
+        List<EmailAnalysis> processedAnalyses = futures.stream()
+                .map(java.util.concurrent.CompletableFuture::join)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+
+        log.info("Finished analysis of {} emails. Successfully processed: {}", emails.size(), processedAnalyses.size());
         return processedAnalyses;
+    }
+
+    private EmailAnalysis analyzeSingleEmail(FetchedEmailDto email) {
+        String emailId = email.getEmailId();
+        try {
+            // Idempotency check
+            if (repository.existsById(emailId)) {
+                log.info("Email {} already processed. Skipping.", emailId);
+                jobProgressService.incrementSkipped("Email " + emailId + " already processed. Skipped.");
+                return null;
+            }
+
+            String subject = email.getSubject();
+            String sender = email.getSenderLine();
+            String content = email.getContent() != null ? email.getContent() : "";
+            LocalDateTime emailDate = email.getEmailDate();
+
+            log.info("Analyzing email: '{}' from {}", subject, sender);
+            long start = System.currentTimeMillis();
+
+            EmailAnalysisResult result = aiService.analyzeEmail(
+                    emailId,
+                    subject,
+                    sender,
+                    content,
+                    email.getInReplyTo(),
+                    email.getReferences(),
+                    email.getAttachments()
+            );
+            enrichResult(result, emailId, subject, sender, emailDate);
+
+            // Save to DB
+            EmailAnalysis savedAnalysis = saveAnalysis(result);
+            jobProgressService.incrementProcessed(
+                    "Processed email " + emailId + " with score " + result.getCriticalityScore() + "."
+            );
+
+            long end = System.currentTimeMillis();
+            log.info("Analysis complete for email '{}' (Score: {}, Time: {} ms)", subject, result.getCriticalityScore(), (end - start));
+            return savedAnalysis;
+
+        } catch (Exception e) {
+            log.error("Analysis error for emailId {}: {}", emailId, e.getMessage());
+            jobProgressService.incrementError("Analysis error for emailId=" + emailId + ": " + e.getMessage());
+            return null;
+        }
     }
 
     private void enrichResult(

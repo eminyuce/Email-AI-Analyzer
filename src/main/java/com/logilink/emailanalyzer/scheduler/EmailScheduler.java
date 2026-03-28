@@ -28,11 +28,7 @@ public class EmailScheduler {
     private final AnalysisService analysisService;
     private final AppSettingsService appSettingsService;
     private final JobProgressService jobProgressService;
-    private final ExecutorService analysisExecutor = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "email-batch-analysis");
-        t.setDaemon(false);
-        return t;
-    });
+    private final ExecutorService analysisExecutor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor();
 
     public EmailScheduler(
             AnalysisService analysisService,

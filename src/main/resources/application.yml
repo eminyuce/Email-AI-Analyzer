@@ -3,6 +3,9 @@ server:
   forward-headers-strategy: framework
 
 spring:
+  threads:
+    virtual:
+      enabled: true
   application:
     name: email-ai-analyzer
   profiles:

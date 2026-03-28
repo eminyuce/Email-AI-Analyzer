@@ -169,6 +169,8 @@ public class EmailService {
             FetchProfile fetchProfile = new FetchProfile();
             fetchProfile.add(FetchProfile.Item.ENVELOPE);
             fetchProfile.add(FetchProfile.Item.CONTENT_INFO);
+            fetchProfile.add(FetchProfile.Item.FLAGS);
+            fetchProfile.add(UIDFolder.FetchProfileItem.UID);
             emailFolder.fetch(folderMessages.toArray(new Message[0]), fetchProfile);
             // Jakarta Mail Message instances are invalid after the folder closes; snapshot fields now.
             return materializeToDtos(folderMessages);
@@ -191,14 +193,35 @@ public class EmailService {
     }
 
     private List<FetchedEmailDto> materializeToDtos(List<Message> connected) {
-        List<FetchedEmailDto> out = new ArrayList<>(connected.size());
-        for (Message message : connected) {
-            try {
-                out.add(toFetchedEmailDto(message));
-            } catch (Exception e) {
-                log.warn("Skipping email that could not be read while IMAP folder was open: {}", e.getMessage());
-            }
+        if (connected.isEmpty()) {
+            return List.of();
         }
+
+        long startTime = System.currentTimeMillis();
+        log.info("Materializing {} emails to DTOs using virtual threads...", connected.size());
+
+        List<java.util.concurrent.CompletableFuture<FetchedEmailDto>> futures = connected.stream()
+                .map(message -> java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                    try {
+                        long msgStart = System.currentTimeMillis();
+                        FetchedEmailDto dto = toFetchedEmailDto(message);
+                        long msgEnd = System.currentTimeMillis();
+                        log.info("Processed email: '{}' ({} ms)", dto.getSubject(), (msgEnd - msgStart));
+                        return dto;
+                    } catch (Exception e) {
+                        log.warn("Skipping email that could not be read while IMAP folder was open: {}", e.getMessage());
+                        return null;
+                    }
+                }, java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()))
+                .toList();
+
+        List<FetchedEmailDto> out = futures.stream()
+                .map(java.util.concurrent.CompletableFuture::join)
+                .filter(Objects::nonNull)
+                .toList();
+
+        long endTime = System.currentTimeMillis();
+        log.info("Materialized {}/{} emails in {} ms", out.size(), connected.size(), (endTime - startTime));
         return out;
     }
 
