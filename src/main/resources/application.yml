@@ -8,6 +8,17 @@ spring:
   profiles:
     default: local
 
+  # Added mail configuration here to resolve the "Server is not trusted" error
+  mail:
+    properties:
+      mail:
+        imap:
+          ssl:
+            trust: "*"
+        imaps:
+          ssl:
+            trust: "*"
+
   jpa:
     hibernate:
       ddl-auto: update
@@ -17,7 +28,7 @@ spring:
     exclude:
       - org.springframework.ai.autoconfigure.ollama.OllamaAutoConfiguration
 
-# When true, logs may include plaintext secrets (API keys, mail/db passwords, etc.). Use only for debugging.
+# When true, logs may include plaintext secrets. Use only for debugging.
 app:
   debug-log-secrets: ${DEBUG_LOG_SECRETS:false}
 
@@ -49,7 +60,6 @@ logging:
     org.hibernate.orm.jdbc.bind: WARN
 
 management:
-  # Shares server.port: a separate management.server.port serves only actuator, not /api/**.
   endpoints:
     web:
       exposure:
