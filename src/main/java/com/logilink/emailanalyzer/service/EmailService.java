@@ -198,27 +198,21 @@ public class EmailService {
         }
 
         long startTime = System.currentTimeMillis();
-        log.info("Materializing {} emails to DTOs using virtual threads...", connected.size());
+        log.info("Materializing {} emails to DTOs sequentially to avoid IMAP folder deadlocks...", connected.size());
 
-        List<java.util.concurrent.CompletableFuture<FetchedEmailDto>> futures = connected.stream()
-                .map(message -> java.util.concurrent.CompletableFuture.supplyAsync(() -> {
-                    try {
-                        long msgStart = System.currentTimeMillis();
-                        FetchedEmailDto dto = toFetchedEmailDto(message);
-                        long msgEnd = System.currentTimeMillis();
-                        log.info("Processed email: '{}' ({} ms)", dto.getSubject(), (msgEnd - msgStart));
-                        return dto;
-                    } catch (Exception e) {
-                        log.warn("Skipping email that could not be read while IMAP folder was open: {}", e.getMessage());
-                        return null;
-                    }
-                }, java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()))
-                .toList();
-
-        List<FetchedEmailDto> out = futures.stream()
-                .map(java.util.concurrent.CompletableFuture::join)
-                .filter(Objects::nonNull)
-                .toList();
+        List<FetchedEmailDto> out = new ArrayList<>(connected.size());
+        for (int i = 0; i < connected.size(); i++) {
+            Message message = connected.get(i);
+            try {
+                long msgStart = System.currentTimeMillis();
+                FetchedEmailDto dto = toFetchedEmailDto(message);
+                long msgEnd = System.currentTimeMillis();
+                out.add(dto);
+                log.info("Processed email [{}/{}]: '{}' ({} ms)", (i + 1), connected.size(), dto.getSubject(), (msgEnd - msgStart));
+            } catch (Exception e) {
+                log.warn("Skipping email that could not be read while IMAP folder was open: {}", e.getMessage());
+            }
+        }
 
         long endTime = System.currentTimeMillis();
         log.info("Materialized {}/{} emails in {} ms", out.size(), connected.size(), (endTime - startTime));
