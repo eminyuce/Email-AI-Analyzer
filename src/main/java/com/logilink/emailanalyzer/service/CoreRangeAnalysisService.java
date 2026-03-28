@@ -70,7 +70,15 @@ public class CoreRangeAnalysisService {
                 String sender = email.getSenderLine();
                 String content = email.getContent() != null ? email.getContent() : "";
 
-                EmailAnalysisResult result = aiService.analyzeEmail(emailId, subject, sender, content);
+                EmailAnalysisResult result = aiService.analyzeEmail(
+                        emailId,
+                        subject,
+                        sender,
+                        content,
+                        email.getInReplyTo(),
+                        email.getReferences(),
+                        email.getAttachments()
+                );
                 log.info("Core range analysis result for email {}: {}", emailId, result);
                 enrichResultFromFetchedEmail(result, email, emailId, subject, sender);
                 EmailAnalysis saved = emailAnalysisRepository.save(toEntity(result));
