@@ -72,7 +72,7 @@ EMAIL_IMAP_WRITE_TIMEOUT_MS=20000
 EMAIL_IMAP_SSL_TRUST=*
 ```
 
-GitHub Actions CI reads optional variables `GROQ_API_KEY`, `DEBUG_LOG_SECRETS`, and (for registry push) `DOCKER_USERNAME` / `DOCKER_PASSWORD` from repository **Variables** (not Encrypted Secrets); see `.github/workflows/docker-image.yml`.
+GitHub Actions CI reads optional variables `GROQ_API_KEY` and `DEBUG_LOG_SECRETS` from repository **Variables**, and (for registry push) `DOCKER_USERNAME` / `DOCKER_PASSWORD` from **Encrypted Secrets**; see `.github/workflows/docker-image.yml`.
 
 ## Run Locally
 

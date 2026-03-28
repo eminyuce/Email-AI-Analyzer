@@ -4,10 +4,9 @@ on:
   push:
     branches: ["master"]
 
-# CI uses GitHub Actions Variables (Settings → Secrets and variables → Actions → Variables).
-# Optional for Maven: GROQ_API_KEY, DEBUG_LOG_SECRETS.
-# For Docker Hub push: set DOCKER_USERNAME and DOCKER_PASSWORD variables (or switch back to Encrypted
-# Secrets later for the password). Runtime deploy: SECURITY_USER, SECURITY_PASS, DB_*, etc. — see .env.example
+# CI: GitHub Actions Variables (Settings → Actions → Variables) for optional Maven: GROQ_API_KEY, DEBUG_LOG_SECRETS.
+# For Docker Hub push: set DOCKER_USERNAME and DOCKER_PASSWORD as repository Encrypted Secrets
+# (Settings → Secrets and variables → Actions → Secrets). Runtime deploy: SECURITY_USER, SECURITY_PASS, DB_*, etc. — see .env.example
 
 jobs:
   build-deploy:
@@ -40,8 +39,8 @@ jobs:
       - name: Prepare Docker image tag
         id: prepare
         run: |
-          if [ -n "${{ vars.DOCKER_USERNAME }}" ] && [ -n "${{ vars.DOCKER_PASSWORD }}" ]; then
-            DOCKER_USER_LOWER=$(echo "${{ vars.DOCKER_USERNAME }}" | tr '[:upper:]' '[:lower:]')
+          if [ -n "${{ secrets.DOCKER_USERNAME }}" ] && [ -n "${{ secrets.DOCKER_PASSWORD }}" ]; then
+            DOCKER_USER_LOWER=$(echo "${{ secrets.DOCKER_USERNAME }}" | tr '[:upper:]' '[:lower:]')
             echo "docker_image=${DOCKER_USER_LOWER}/${IMAGE_NAME}:latest" >> $GITHUB_OUTPUT
             echo "push=true" >> $GITHUB_OUTPUT
           else
@@ -55,8 +54,8 @@ jobs:
       - name: Login and push to Docker Hub
         if: ${{ steps.prepare.outputs.push == 'true' }}
         env:
-          DOCKER_USER: ${{ vars.DOCKER_USERNAME }}
-          DOCKER_TOKEN: ${{ vars.DOCKER_PASSWORD }}
+          DOCKER_USER: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_TOKEN: ${{ secrets.DOCKER_PASSWORD }}
         run: |
           echo "$DOCKER_TOKEN" | docker login -u "$DOCKER_USER" --password-stdin
           docker push "${{ steps.prepare.outputs.docker_image }}"
