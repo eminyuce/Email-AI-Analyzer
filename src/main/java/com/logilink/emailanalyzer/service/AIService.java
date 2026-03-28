@@ -49,11 +49,14 @@ public class AIService {
         this.secretsDebug = secretsDebug;
     }
 
-    public EmailAnalysisResult analyzeEmail(String emailId, String subject, String sender, String content) {
-        return analyzeEmail(emailId, subject, sender, content, null);
+    public EmailAnalysisResult analyzeEmail(String emailId, String subject, String sender, String content,
+                                            String inReplyTo, String references, List<FetchedEmailDto.AttachmentDto> attachments) {
+        return analyzeEmail(emailId, subject, sender, content, inReplyTo, references, attachments, null);
     }
 
-    public EmailAnalysisResult analyzeEmail(String emailId, String subject, String sender, String content, String systemPromptOverride) {
+    public EmailAnalysisResult analyzeEmail(String emailId, String subject, String sender, String content,
+                                            String inReplyTo, String references, List<FetchedEmailDto.AttachmentDto> attachments,
+                                            String systemPromptOverride) {
         try {
             AppSettings settings = appSettingsService.getOrCreate();
             LlmProviderType provider = LlmProviderType.fromSettingsValue(settings.getLlmProvider());
@@ -61,13 +64,29 @@ public class AIService {
                     ? systemPromptOverride
                     : settings.getSystemPrompt();
             log.debug("AI system prompt: {}", systemPrompt);
-            String userPrompt = String.format("""
-                    Email ID: %s
-                    Subject: %s
-                    Sender: %s
-                    Content:
-                    %s
-                    """, emailId, subject, sender, content);
+
+            StringBuilder userPromptBuilder = new StringBuilder();
+            userPromptBuilder.append(String.format("Email ID: %s\n", emailId));
+            userPromptBuilder.append(String.format("Subject: %s\n", subject));
+            userPromptBuilder.append(String.format("Sender: %s\n", sender));
+            if (StringUtils.isNotBlank(inReplyTo)) {
+                userPromptBuilder.append(String.format("In-Reply-To: %s\n", inReplyTo));
+            }
+            if (StringUtils.isNotBlank(references)) {
+                userPromptBuilder.append(String.format("References: %s\n", references));
+            }
+            userPromptBuilder.append("Content:\n").append(content);
+
+            if (attachments != null && !attachments.isEmpty()) {
+                userPromptBuilder.append("\n\nAttachments:\n");
+                for (int i = 0; i < attachments.size(); i++) {
+                    FetchedEmailDto.AttachmentDto attachment = attachments.get(i);
+                    userPromptBuilder.append(String.format("  Attachment %d: File Name: '%s', Content Type: '%s', Size: %d bytes\n",
+                            i + 1, attachment.getFileName(), attachment.getContentType(), attachment.getSize()));
+                }
+            }
+
+            String userPrompt = userPromptBuilder.toString();
             log.debug("AI user prompt: {}", userPrompt);
 
             EmailAnalysisResult result = switch (provider) {

@@ -27,6 +27,9 @@ public class FetchedEmailDto {
     private String content;
     private LocalDateTime emailDate;
     private Instant receivedAt;
+    private String inReplyTo;
+    private String references;
+    private List<AttachmentDto> attachments;
 
     /**
      * From addresses as one string for AI prompts and {@code EmailAnalysis.sender} (comma-separated if several).
@@ -36,5 +39,16 @@ public class FetchedEmailDto {
             return "";
         }
         return String.join(", ", senders);
+    }
+
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class AttachmentDto {
+        private String fileName;
+        private String contentType;
+        private byte[] data;
+        private long size;
     }
 }

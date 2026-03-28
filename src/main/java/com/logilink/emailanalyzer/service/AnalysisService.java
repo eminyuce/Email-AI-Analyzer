@@ -124,7 +124,15 @@ public class AnalysisService {
                 log.debug("Preparing AI analysis for emailId={}, subject='{}', sender='{}', contentLength={}",
                         emailId, subject, sender, content.length());
 
-                EmailAnalysisResult result = aiService.analyzeEmail(emailId, subject, sender, content);
+                EmailAnalysisResult result = aiService.analyzeEmail(
+                        emailId,
+                        subject,
+                        sender,
+                        content,
+                        email.getInReplyTo(),
+                        email.getReferences(),
+                        email.getAttachments()
+                );
                 enrichResult(result, emailId, subject, sender, emailDate);
 
                 // Save to DB
