@@ -41,6 +41,8 @@ The app reads configuration from profile-based files under `src/main/resources`:
 
 Active profile can be selected with `SPRING_PROFILES_ACTIVE` (`local`, `dev`, or `prod`).
 
+A full list of environment variables (including optional tuning) is in [`.env.example`](.env.example).
+
 ### Required / Common environment variables
 
 Use these in IntelliJ Run Configuration (Environment variables):
@@ -49,12 +51,15 @@ Use these in IntelliJ Run Configuration (Environment variables):
 DB_URL=jdbc:mysql://localhost:3306/email_db
 DB_USER=email_user
 DB_PASSWORD=password
-SPRING_AI_OLLAMA_BASE_URL=http://localhost:11434
+GROQ_API_KEY=
 
 SECURITY_USER=admin
 SECURITY_PASS=changeme
 SECURITY_LOG_CREDENTIALS_ON_STARTUP=false
+DEBUG_LOG_SECRETS=false
 ```
+
+Ollama base URL is configured per settings profile in the app (not via `SPRING_AI_OLLAMA_BASE_URL`).
 
 ### Optional environment variables
 
@@ -66,6 +71,8 @@ EMAIL_IMAP_TIMEOUT_MS=20000
 EMAIL_IMAP_WRITE_TIMEOUT_MS=20000
 EMAIL_IMAP_SSL_TRUST=*
 ```
+
+GitHub Actions CI reads optional variables `GROQ_API_KEY`, `DEBUG_LOG_SECRETS`, and (for registry push) `DOCKER_USERNAME` / `DOCKER_PASSWORD` from repository **Variables** (not Encrypted Secrets); see `.github/workflows/docker-image.yml`.
 
 ## Run Locally
 

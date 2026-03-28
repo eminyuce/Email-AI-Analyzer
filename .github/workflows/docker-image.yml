@@ -4,10 +4,10 @@ on:
   push:
     branches: ["master"]
 
-# Runtime login uses SECURITY_USER / SECURITY_PASS (see ActuatorSecurityConfig). Pass them into your host or
-# container environment when you deploy. For temporary debugging of plaintext credentials in logs, set
-# DEBUG_LOG_SECRETS=true (repository secret DEBUG_LOG_SECRETS) and/or SECURITY_LOG_CREDENTIALS_ON_STARTUP=true
-# on the running process; disable afterward.
+# CI uses GitHub Actions Variables (Settings → Secrets and variables → Actions → Variables).
+# Optional for Maven: GROQ_API_KEY, DEBUG_LOG_SECRETS.
+# For Docker Hub push: set DOCKER_USERNAME and DOCKER_PASSWORD variables (or switch back to Encrypted
+# Secrets later for the password). Runtime deploy: SECURITY_USER, SECURITY_PASS, DB_*, etc. — see .env.example
 
 jobs:
   build-deploy:
@@ -15,8 +15,8 @@ jobs:
 
     env:
       IMAGE_NAME: email-ai-analyzer
-      GROQ_API_KEY: ${{ secrets.GROQ_LLM_API_KEY }}
-      DEBUG_LOG_SECRETS: ${{ secrets.DEBUG_LOG_SECRETS }}
+      GROQ_API_KEY: ${{ vars.GROQ_API_KEY }}
+      DEBUG_LOG_SECRETS: ${{ vars.DEBUG_LOG_SECRETS || 'false' }}
 
     steps:
       - name: Checkout source
@@ -40,24 +40,23 @@ jobs:
       - name: Prepare Docker image tag
         id: prepare
         run: |
-          if [ -z "${{ secrets.DOCKER_USERNAME }}" ]; then
-            echo "DOCKER_USERNAME is missing"
-            exit 1
+          if [ -n "${{ vars.DOCKER_USERNAME }}" ] && [ -n "${{ vars.DOCKER_PASSWORD }}" ]; then
+            DOCKER_USER_LOWER=$(echo "${{ vars.DOCKER_USERNAME }}" | tr '[:upper:]' '[:lower:]')
+            echo "docker_image=${DOCKER_USER_LOWER}/${IMAGE_NAME}:latest" >> $GITHUB_OUTPUT
+            echo "push=true" >> $GITHUB_OUTPUT
+          else
+            echo "docker_image=${IMAGE_NAME}:ci" >> $GITHUB_OUTPUT
+            echo "push=false" >> $GITHUB_OUTPUT
           fi
-          if [ -z "${{ secrets.DOCKER_PASSWORD }}" ]; then
-            echo "DOCKER_PASSWORD is missing"
-            exit 1
-          fi
-
-          DOCKER_USER_LOWER=$(echo "${{ secrets.DOCKER_USERNAME }}" | tr '[:upper:]' '[:lower:]')
-          echo "docker_image=${DOCKER_USER_LOWER}/${IMAGE_NAME}:latest" >> $GITHUB_OUTPUT
 
       - name: Build Docker image
         run: docker build -t "${{ steps.prepare.outputs.docker_image }}" .
 
-      - name: Login to Docker Hub
-        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-
-      - name: Push Docker image
-        run: docker push "${{ steps.prepare.outputs.docker_image }}"
-
+      - name: Login and push to Docker Hub
+        if: ${{ steps.prepare.outputs.push == 'true' }}
+        env:
+          DOCKER_USER: ${{ vars.DOCKER_USERNAME }}
+          DOCKER_TOKEN: ${{ vars.DOCKER_PASSWORD }}
+        run: |
+          echo "$DOCKER_TOKEN" | docker login -u "$DOCKER_USER" --password-stdin
+          docker push "${{ steps.prepare.outputs.docker_image }}"
