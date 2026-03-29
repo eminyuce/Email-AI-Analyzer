@@ -30,7 +30,7 @@
                 <div class="col-md-3">
                     <label for="keyword" class="form-label">Keyword</label>
                     <input type="text" class="form-control" id="keyword" name="keyword" th:value="${keyword}"
-                           placeholder="Subject or Sender...">
+                           placeholder="Subject, sender, or message body…">
                 </div>
                 <div class="col-md-3">
                     <label for="settingId" class="form-label">Settings profile</label>
@@ -93,6 +93,7 @@
                         <th>Profile</th>
                         <th>Subject</th>
                         <th>Sender</th>
+                        <th>Body preview</th>
                         <th>Email Date</th>
                         <th>Processed</th>
                         <th>Action</th>
@@ -116,8 +117,16 @@
                                class="text-decoration-none" th:text="${'#' + email.settingId}">#1</a>
                             <span th:if="${email.settingId == null}" class="text-muted">—</span>
                         </td>
-                        <td th:text="${email.subject}">Subject</td>
-                        <td th:text="${email.sender}">Sender</td>
+                        <td class="text-truncate align-middle" style="max-width: 11rem;" th:title="${email.subject}"
+                            th:text="${email.subject != null ? email.subject : '—'}">Subject</td>
+                        <td class="text-truncate align-middle" style="max-width: 10rem;" th:title="${email.sender}"
+                            th:text="${email.sender != null ? email.sender : '—'}">Sender</td>
+                        <td class="small text-muted align-middle" style="max-width: 16rem;">
+                            <span th:if="${email.content == null || #strings.isEmpty(email.content)}">—</span>
+                            <span th:unless="${email.content == null || #strings.isEmpty(email.content)}"
+                                  th:text="${#strings.abbreviate(email.content, 120)}"
+                                  th:title="${email.content}">Preview</span>
+                        </td>
                         <td th:text="${#temporals.format(email.emailDate, 'yyyy-MM-dd HH:mm')}">Date</td>
                         <td th:text="${#temporals.format(email.processedAt, 'yyyy-MM-dd HH:mm')}">Processed</td>
                         <td>
@@ -127,14 +136,14 @@
                                title="No Action"></i>
                         </td>
                         <td>
-                            <a th:href="@{/emails/{emailId}(emailId=${email.emailId})}"
+                            <a th:href="@{/emails/{id}(id=${email.id})}"
                                class="btn btn-sm btn-outline-primary">
                                 <i class="bi bi-eye"></i>
                             </a>
                         </td>
                     </tr>
                     <tr th:if="${page.isEmpty()}">
-                        <td colspan="9" class="text-center py-4">No analyzed emails found.</td>
+                        <td colspan="10" class="text-center py-4">No analyzed emails found.</td>
                     </tr>
                     </tbody>
                 </table>

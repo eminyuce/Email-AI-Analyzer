@@ -60,10 +60,10 @@ public class EmailAnalysisController {
         return "email/list";
     }
 
-    @GetMapping("/{emailId}")
-    public String detail(@PathVariable String emailId, Model model) {
-        EmailAnalysis email = service.findById(emailId)
-                .orElseThrow(() -> new RuntimeException("Email not found: " + emailId));
+    @GetMapping("/{id}")
+    public String detail(@PathVariable Long id, Model model) {
+        EmailAnalysis email = service.findById(id)
+                .orElseThrow(() -> new RuntimeException("Email not found: " + id));
         model.addAttribute("email", email);
         return "email/detail";
     }

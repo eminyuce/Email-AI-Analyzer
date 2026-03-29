@@ -61,7 +61,7 @@ public class CoreRangeAnalysisService {
             String emailId = "unknown";
             try {
                 emailId = email.getEmailId();
-                if (emailAnalysisRepository.existsById(emailId)) {
+                if (emailAnalysisRepository.existsByEmailId(emailId)) {
                     skippedCount++;
                     continue;
                 }
@@ -81,7 +81,9 @@ public class CoreRangeAnalysisService {
                 );
                 log.info("Core range analysis result for email {}: {}", emailId, result);
                 enrichResultFromFetchedEmail(result, email, emailId, subject, sender);
-                EmailAnalysis saved = emailAnalysisRepository.save(toEntity(result));
+                EmailAnalysis saved = emailAnalysisRepository.save(
+                        toEntity(result, content, email.getInReplyTo(), email.getReferences())
+                );
                 reports.add(emailAnalysisMapper.toReportDto(saved));
                 analyzedCount++;
             } catch (Exception e) {
@@ -128,7 +130,12 @@ public class CoreRangeAnalysisService {
         result.resolveEmailDate(email.getEmailDate());
     }
 
-    private EmailAnalysis toEntity(EmailAnalysisResult result) {
+    private EmailAnalysis toEntity(
+            EmailAnalysisResult result,
+            String content,
+            String inReplyTo,
+            String references
+    ) {
         Long settingId = appSettingsService.getOrCreate().getId();
         return EmailAnalysis.builder()
                 .emailId(result.getEmailId())
@@ -136,6 +143,9 @@ public class CoreRangeAnalysisService {
                 .emailDate(result.getEmailDate())
                 .subject(result.getSubject())
                 .sender(result.getSender())
+                .content(content)
+                .inReplyTo(inReplyTo)
+                .emailReferences(references)
                 .criticalityScore(result.getCriticalityScore())
                 .criticalityLevel(result.getCriticalityLevel())
                 .breakdown(result.getBreakdown())

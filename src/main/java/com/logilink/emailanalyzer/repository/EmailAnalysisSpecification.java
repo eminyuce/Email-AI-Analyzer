@@ -30,7 +30,8 @@ public class EmailAnalysisSpecification {
                 String likePattern = "%" + keyword.toLowerCase() + "%";
                 predicates.add(cb.or(
                         cb.like(cb.lower(root.get("subject")), likePattern),
-                        cb.like(cb.lower(root.get("sender")), likePattern)
+                        cb.like(cb.lower(root.get("sender")), likePattern),
+                        cb.like(cb.lower(root.get("content")), likePattern)
                 ));
             }
 

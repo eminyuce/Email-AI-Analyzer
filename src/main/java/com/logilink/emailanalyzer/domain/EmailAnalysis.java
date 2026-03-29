@@ -1,9 +1,6 @@
 package com.logilink.emailanalyzer.domain;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -23,6 +20,10 @@ import java.util.List;
 public class EmailAnalysis {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @EqualsAndHashCode.Include
+    private Long id;
+
     @Column(name = "email_id")
     @EqualsAndHashCode.Include
     private String emailId;
@@ -42,6 +43,18 @@ public class EmailAnalysis {
 
     private String subject;
     private String sender;
+
+    @Column(columnDefinition = "TEXT")
+    private String content;
+
+    @Column(name = "in_reply_to", columnDefinition = "TEXT")
+    private String inReplyTo;
+
+    /**
+     * Value of the RFC 5322 References header (message-id chain).
+     */
+    @Column(name = "email_references", columnDefinition = "TEXT")
+    private String emailReferences;
 
     @Column(name = "criticality_score")
     private Integer criticalityScore;
@@ -74,4 +87,6 @@ public class EmailAnalysis {
     private String estimatedResponseTime;
 
     private Integer confidence;
+
+
 }

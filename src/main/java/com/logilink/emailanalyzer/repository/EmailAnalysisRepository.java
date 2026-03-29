@@ -8,6 +8,8 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface EmailAnalysisRepository extends JpaRepository<EmailAnalysis, String>, JpaSpecificationExecutor<EmailAnalysis> {
+public interface EmailAnalysisRepository extends JpaRepository<EmailAnalysis, Long>, JpaSpecificationExecutor<EmailAnalysis> {
     List<EmailAnalysis> findTop20ByOrderByProcessedAtDesc();
+
+    boolean existsByEmailId(String emailId);
 }

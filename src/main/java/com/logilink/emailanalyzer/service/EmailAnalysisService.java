@@ -51,7 +51,7 @@ public class EmailAnalysisService {
         return repository.findAll(spec, pageable);
     }
 
-    public Optional<EmailAnalysis> findById(String id) {
+    public Optional<EmailAnalysis> findById(Long id) {
         return repository.findById(id);
     }
 

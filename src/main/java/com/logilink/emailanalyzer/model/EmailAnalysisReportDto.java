@@ -19,6 +19,9 @@ public class EmailAnalysisReportDto {
     private LocalDateTime processedAt;
     private String subject;
     private String sender;
+    private String content;
+    private String inReplyTo;
+    private String emailReferences;
     private Integer criticalityScore;
     private String criticalityLevel;
     private Breakdown breakdown;

@@ -138,7 +138,7 @@ public class AnalysisService {
         String emailId = email.getEmailId();
         try {
             // Idempotency check
-            if (repository.existsById(emailId)) {
+            if (repository.existsByEmailId(emailId)) {
                 log.info("Email {} already processed. Skipping.", emailId);
                 jobProgressService.incrementSkipped("Email " + emailId + " already processed. Skipped.");
                 return null;
@@ -164,7 +164,12 @@ public class AnalysisService {
             enrichResult(result, emailId, subject, sender, emailDate);
 
             // Save to DB
-            EmailAnalysis savedAnalysis = saveAnalysis(result);
+            EmailAnalysis savedAnalysis = saveAnalysis(
+                    result,
+                    content,
+                    email.getInReplyTo(),
+                    email.getReferences()
+            );
             jobProgressService.incrementProcessed(
                     "Processed email " + emailId + " with score " + result.getCriticalityScore() + "."
             );
@@ -200,7 +205,12 @@ public class AnalysisService {
     }
 
     @Transactional
-    protected EmailAnalysis saveAnalysis(EmailAnalysisResult result) {
+    protected EmailAnalysis saveAnalysis(
+            EmailAnalysisResult result,
+            String content,
+            String inReplyTo,
+            String references
+    ) {
         Long settingId = appSettingsService.getOrCreate().getId();
         EmailAnalysis entity = EmailAnalysis.builder()
                 .emailId(result.getEmailId())
@@ -208,6 +218,9 @@ public class AnalysisService {
                 .emailDate(result.getEmailDate())
                 .subject(result.getSubject())
                 .sender(result.getSender())
+                .content(content)
+                .inReplyTo(inReplyTo)
+                .emailReferences(references)
                 .criticalityScore(result.getCriticalityScore())
                 .criticalityLevel(result.getCriticalityLevel())
                 .breakdown(result.getBreakdown())
