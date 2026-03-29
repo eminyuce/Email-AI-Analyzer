@@ -5,6 +5,7 @@ import com.logilink.emailanalyzer.domain.EmailAnalysis;
 import com.logilink.emailanalyzer.model.EmailAnalysisResult;
 import com.logilink.emailanalyzer.model.FetchedEmailDto;
 import com.logilink.emailanalyzer.repository.EmailAnalysisRepository;
+import com.logilink.emailanalyzer.util.EmailContentNormalizer;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
@@ -212,13 +213,14 @@ public class AnalysisService {
             String references
     ) {
         Long settingId = appSettingsService.getOrCreate().getId();
+        String storedContent = EmailContentNormalizer.normalize(content);
         EmailAnalysis entity = EmailAnalysis.builder()
                 .emailId(result.getEmailId())
                 .settingId(settingId)
                 .emailDate(result.getEmailDate())
                 .subject(result.getSubject())
                 .sender(result.getSender())
-                .content(content)
+                .content(storedContent)
                 .inReplyTo(inReplyTo)
                 .emailReferences(references)
                 .criticalityScore(result.getCriticalityScore())

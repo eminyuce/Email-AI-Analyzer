@@ -44,7 +44,7 @@ public class EmailAnalysis {
     private String subject;
     private String sender;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(columnDefinition = "LONGTEXT")
     private String content;
 
     @Column(name = "in_reply_to", columnDefinition = "TEXT")

@@ -8,6 +8,7 @@ import com.logilink.emailanalyzer.model.EmailAnalysisReportDto;
 import com.logilink.emailanalyzer.model.EmailAnalysisResult;
 import com.logilink.emailanalyzer.model.FetchedEmailDto;
 import com.logilink.emailanalyzer.repository.EmailAnalysisRepository;
+import com.logilink.emailanalyzer.util.EmailContentNormalizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
@@ -137,13 +138,14 @@ public class CoreRangeAnalysisService {
             String references
     ) {
         Long settingId = appSettingsService.getOrCreate().getId();
+        String storedContent = EmailContentNormalizer.normalize(content);
         return EmailAnalysis.builder()
                 .emailId(result.getEmailId())
                 .settingId(settingId)
                 .emailDate(result.getEmailDate())
                 .subject(result.getSubject())
                 .sender(result.getSender())
-                .content(content)
+                .content(storedContent)
                 .inReplyTo(inReplyTo)
                 .emailReferences(references)
                 .criticalityScore(result.getCriticalityScore())
