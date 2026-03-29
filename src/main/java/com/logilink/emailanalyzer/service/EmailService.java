@@ -6,7 +6,6 @@ import com.logilink.emailanalyzer.exception.EmailAnalysisException;
 import com.logilink.emailanalyzer.model.FetchedEmailDto;
 import com.logilink.emailanalyzer.model.FetchedEmailDto.AttachmentDto;
 import jakarta.mail.*;
-import jakarta.mail.internet.InternetHeaders;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
 import jakarta.mail.internet.MimeUtility;
@@ -52,62 +51,115 @@ public class EmailService {
         this.imapReadTimeoutMs = imapReadTimeoutMs;
         this.imapWriteTimeoutMs = imapWriteTimeoutMs;
         this.imapSslTrust = imapSslTrust;
+        log.debug(
+                "EmailService constructed: imap connectionTimeoutMs={}, readTimeoutMs={}, writeTimeoutMs={}, ssl.trust={}",
+                imapConnectionTimeoutMs,
+                imapReadTimeoutMs,
+                imapWriteTimeoutMs,
+                imapSslTrust);
     }
 
     public List<FetchedEmailDto> fetchUnreadEmails(int maxEmails) {
+        log.debug("fetchUnreadEmails: entry maxEmails={}, lookbackDays={}", maxEmails, DEFAULT_LOOKBACK_DAYS);
         if (maxEmails <= 0) {
+            log.debug("fetchUnreadEmails: early exit (maxEmails<=0)");
             return List.of();
         }
 
         Instant now = Instant.now();
         Date endDate = Date.from(now);
         Date startDate = Date.from(now.minus(DEFAULT_LOOKBACK_DAYS, ChronoUnit.DAYS));
-        return fetchUnreadEmailsByRange(maxEmails, startDate, endDate);
+        log.debug("fetchUnreadEmails: derived range [{} .. {}]", startDate, endDate);
+        List<FetchedEmailDto> out = fetchUnreadEmailsByRange(maxEmails, startDate, endDate);
+        log.debug("fetchUnreadEmails: exit count={}", out.size());
+        return out;
     }
 
     public List<FetchedEmailDto> fetchUnreadEmailsByRange(int maxEmails, Date startDate, Date endDate) {
+        log.debug(
+                "fetchUnreadEmailsByRange: delegating maxEmails={}, startDate={}, endDate={}",
+                maxEmails,
+                startDate,
+                endDate);
         return fetchEmailsByRange(maxEmails, startDate, endDate, true);
     }
 
     public List<FetchedEmailDto> fetchEmails(int maxEmails) {
+        log.debug("fetchEmails: entry maxEmails={}, lookbackDays={}", maxEmails, DEFAULT_LOOKBACK_DAYS);
         if (maxEmails <= 0) {
+            log.debug("fetchEmails: early exit (maxEmails<=0)");
             return List.of();
         }
 
         Instant now = Instant.now();
         Date endDate = Date.from(now);
         Date startDate = Date.from(now.minus(DEFAULT_LOOKBACK_DAYS, ChronoUnit.DAYS));
-        return fetchEmailsByRange(maxEmails, startDate, endDate, false);
+        log.debug("fetchEmails: derived range [{} .. {}]", startDate, endDate);
+        List<FetchedEmailDto> out = fetchEmailsByRange(maxEmails, startDate, endDate, false);
+        log.debug("fetchEmails: exit count={}", out.size());
+        return out;
     }
 
     public List<FetchedEmailDto> fetchEmailsByRange(int maxEmails, Date startDate, Date endDate) {
+        log.debug(
+                "fetchEmailsByRange(3-arg): maxEmails={}, startDate={}, endDate={}, unreadOnly=false",
+                maxEmails,
+                startDate,
+                endDate);
         return fetchEmailsByRange(maxEmails, startDate, endDate, false);
     }
 
     public List<FetchedEmailDto> fetchEmailsByRange(int maxEmails, Date startDate, Date endDate, boolean unreadOnly) {
+        log.debug(
+                "fetchEmailsByRange: entry maxEmails={}, startDate={}, endDate={}, unreadOnly={}",
+                maxEmails,
+                startDate,
+                endDate,
+                unreadOnly);
         if (maxEmails <= 0) {
+            log.debug("fetchEmailsByRange: early exit (maxEmails<=0)");
             return List.of();
         }
         if (startDate == null || endDate == null || startDate.after(endDate)) {
+            log.debug(
+                    "fetchEmailsByRange: invalid range startDate={} endDate={}",
+                    startDate,
+                    endDate);
             throw new EmailAnalysisException("Invalid date range for email search.");
         }
 
+        log.debug("fetchEmailsByRange: loading required mail settings");
         AppSettings settings = appSettingsService.getRequiredMailSettings();
         List<FetchedEmailDto> emails = new ArrayList<>();
 
         boolean preferImplicitSsl = shouldUseImplicitSsl(settings);
+        log.debug("fetchEmailsByRange: preferImplicitSsl={}", preferImplicitSsl);
         try {
             emails.addAll(fetchMessages(settings, maxEmails, startDate, endDate, unreadOnly, preferImplicitSsl));
-            log.debug("Fetched {} emails from {} to {} with {} unread emails", emails.size(), startDate, endDate, unreadOnly ? "only" : "all");
+            log.debug(
+                    "fetchEmailsByRange: first attempt OK — {} emails (unread filter: {})",
+                    emails.size(),
+                    unreadOnly ? "unread only" : "all");
         } catch (Exception firstException) {
+            log.debug(
+                    "fetchEmailsByRange: first attempt failed: {} — {}",
+                    firstException.getClass().getSimpleName(),
+                    firstException.getMessage());
             // Retry with STARTTLS when server rejects implicit SSL to avoid SSL handshake mismatch failures.
             if (preferImplicitSsl && isUnsupportedSslMessage(firstException)) {
                 log.warn("IMAPS handshake failed; retrying mailbox fetch with IMAP STARTTLS.");
                 emails.clear();
                 try {
                     emails.addAll(fetchMessages(settings, maxEmails, startDate, endDate, unreadOnly, false));
-                    log.debug("Fetched {} emails from {} to {} with {} unread emails", emails.size(), startDate, endDate, unreadOnly ? "only" : "all");
+                    log.debug(
+                            "fetchEmailsByRange: STARTTLS retry OK — {} emails (unread filter: {})",
+                            emails.size(),
+                            unreadOnly ? "unread only" : "all");
                 } catch (MessagingException retryException) {
+                    log.debug(
+                            "fetchEmailsByRange: STARTTLS retry failed: {}",
+                            retryException.getMessage(),
+                            retryException);
                     throw new EmailAnalysisException("Failed to fetch emails within range", retryException);
                 }
             } else {
@@ -115,6 +167,7 @@ public class EmailService {
                 throw new EmailAnalysisException("Failed to fetch emails within range", firstException);
             }
         }
+        log.debug("fetchEmailsByRange: exit total={}", emails.size());
         return emails;
     }
 
@@ -143,18 +196,23 @@ public class EmailService {
 
         Properties properties = buildMailProperties(settings, protocol.value(), useImplicitSsl);
         Session emailSession = Session.getInstance(properties);
+        log.debug("fetchMessages: Session created (debug disabled on session by default)");
 
         Store store = null;
         Folder emailFolder = null;
 
         try {
+            log.debug("fetchMessages: getStore({})", protocol.value());
             store = emailSession.getStore(protocol.value());
+            log.debug("fetchMessages: connecting store…");
             store.connect(settings.getMailHost(), settings.getMailPort(),
                     settings.getMailUsername(), settings.getMailPassword());
             log.debug("fetchMessages: store connected");
 
             emailFolder = store.getFolder("INBOX");
+            log.debug("fetchMessages: opening INBOX READ_ONLY…");
             emailFolder.open(Folder.READ_ONLY);
+            log.debug("fetchMessages: INBOX open, mode={}", emailFolder.getMode());
 
             // Secondary limit using message numbers to reduce load on large inboxes
             int totalMessages = emailFolder.getMessageCount();
@@ -168,11 +226,13 @@ public class EmailService {
                     fromMessageNumber);
 
             if (totalMessages == 0) {
+                log.debug("fetchMessages: empty INBOX, returning no DTOs");
                 return List.of();
             }
 
             // Avoid Folder.search(): on Gmail (and some other hosts) IMAP SEARCH with date terms can run
             // for a long time or appear busy when we already restrict by message sequence number.
+            log.debug("fetchMessages: getMessages slice {}..{}", fromMessageNumber, totalMessages);
             Message[] slice = emailFolder.getMessages(fromMessageNumber, totalMessages);
             FetchProfile filterProfile = new FetchProfile();
             filterProfile.add(FetchProfile.Item.ENVELOPE);
@@ -232,6 +292,7 @@ public class EmailService {
                     return 0;
                 }
             });
+            log.debug("fetchMessages: sorted {} messages by date (newest first)", foundMessages.length);
 
             int limit = Math.min(maxEmails, foundMessages.length);
             List<Message> messagesToFetch = Arrays.asList(Arrays.copyOfRange(foundMessages, 0, limit));
@@ -275,8 +336,10 @@ public class EmailService {
             return dtos;
 
         } finally {
+            log.debug("fetchMessages: finally — closing folder and store");
             if (emailFolder != null && emailFolder.isOpen()) {
                 try {
+                    log.debug("fetchMessages: closing INBOX (expunge=false)");
                     emailFolder.close(false);
                 } catch (MessagingException e) {
                     log.warn("Failed to close email folder cleanly", e);
@@ -284,11 +347,13 @@ public class EmailService {
             }
             if (store != null && store.isConnected()) {
                 try {
+                    log.debug("fetchMessages: closing store");
                     store.close();
                 } catch (MessagingException e) {
                     log.warn("Failed to close email store cleanly", e);
                 }
             }
+            log.debug("fetchMessages: teardown complete");
         }
     }
 
@@ -391,10 +456,19 @@ public class EmailService {
                 : "<no subject>";
     }
     private FetchedEmailDto toFetchedEmailDto(Message message) throws MessagingException, IOException {
+        int msgNum = message.getMessageNumber();
+        log.debug("toFetchedEmailDto: start msgNum={}", msgNum);
+
         String emailId = getEmailId(message);
         String subject = message.getSubject();
         Date received = message.getReceivedDate();
         Instant receivedAt = received != null ? received.toInstant() : null;
+        log.debug(
+                "toFetchedEmailDto: headers msgNum={} emailId={} subject={} receivedAt={}",
+                msgNum,
+                emailId,
+                subject != null ? subject.substring(0, Math.min(60, subject.length())) : null,
+                receivedAt);
 
         String inReplyTo = null;
         String references = null;
@@ -407,30 +481,56 @@ public class EmailService {
                     .filter(h -> h.length > 0)
                     .map(h -> h[0])
                     .orElse(null);
+            log.debug(
+                    "toFetchedEmailDto: threading msgNum={} inReplyToPresent={} referencesPresent={}",
+                    msgNum,
+                    inReplyTo != null,
+                    references != null);
         }
 
         StringBuilder contentBuilder = new StringBuilder();
         List<AttachmentDto> attachments = new ArrayList<>();
         AtomicLong currentAttachmentSize = new AtomicLong(0);
 
+        log.debug("toFetchedEmailDto: extract body msgNum={} rootContentType={}", msgNum, message.getContentType());
         extractContentAndAttachments(message, contentBuilder, attachments, currentAttachmentSize);
 
-        return FetchedEmailDto.builder()
+        LocalDateTime emailDate = resolveEmailDate(message);
+        List<String> from = getAddresses(message.getFrom());
+        List<String> to = getAddresses(message.getRecipients(Message.RecipientType.TO));
+        List<String> cc = getAddresses(message.getRecipients(Message.RecipientType.CC));
+        log.debug(
+                "toFetchedEmailDto: addresses msgNum={} fromCount={} toCount={} ccCount={}",
+                msgNum,
+                from.size(),
+                to.size(),
+                cc.size());
+
+        FetchedEmailDto built = FetchedEmailDto.builder()
                 .emailId(emailId)
                 .subject(subject)
-                .senders(getAddresses(message.getFrom()))
-                .recipientsTo(getAddresses(message.getRecipients(Message.RecipientType.TO)))
-                .recipientsCc(getAddresses(message.getRecipients(Message.RecipientType.CC)))
+                .senders(from)
+                .recipientsTo(to)
+                .recipientsCc(cc)
                 .content(contentBuilder.toString())
-                .emailDate(resolveEmailDate(message))
+                .emailDate(emailDate)
                 .receivedAt(receivedAt)
                 .inReplyTo(inReplyTo)
                 .references(references)
                 .attachments(attachments)
                 .build();
+        log.debug(
+                "toFetchedEmailDto: done msgNum={} contentChars={} attachmentCount={} totalAttachBytes={}",
+                msgNum,
+                contentBuilder.length(),
+                attachments.size(),
+                currentAttachmentSize.get());
+        return built;
     }
     private List<String> getAddresses(Address[] addresses) {
-        if (addresses == null) return Collections.emptyList();
+        if (addresses == null) {
+            return Collections.emptyList();
+        }
         return Arrays.stream(addresses)
                 .map(Address::toString)
                 .toList();
@@ -439,19 +539,33 @@ public class EmailService {
         try {
             Date sent = message.getSentDate();
             if (sent != null) {
-                return sent.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+                LocalDateTime dt = sent.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+                log.debug("resolveEmailDate: msgNum={} source=sent → {}", message.getMessageNumber(), dt);
+                return dt;
             }
             Date received = message.getReceivedDate();
             if (received != null) {
-                return received.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+                LocalDateTime dt = received.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+                log.debug("resolveEmailDate: msgNum={} source=received → {}", message.getMessageNumber(), dt);
+                return dt;
             }
         } catch (Exception e) {
             log.warn("Failed to extract message date: {}", e.getMessage());
         }
+        log.debug("resolveEmailDate: msgNum={} → null", message.getMessageNumber());
         return null;
     }
 
     private Properties buildMailProperties(AppSettings settings, String protocol, boolean useImplicitSsl) {
+        log.debug(
+                "buildMailProperties: protocol={} useImplicitSsl={} host={} port={} timeouts conn/read/write={}/{}/{}",
+                protocol,
+                useImplicitSsl,
+                settings.getMailHost(),
+                settings.getMailPort(),
+                imapConnectionTimeoutMs,
+                imapReadTimeoutMs,
+                imapWriteTimeoutMs);
         Properties properties = new Properties();
         properties.put("mail.store.protocol", protocol);
         properties.put("mail." + protocol + ".host", settings.getMailHost());
@@ -463,17 +577,26 @@ public class EmailService {
 
         if (useImplicitSsl) {
             properties.put("mail." + protocol + ".ssl.enable", "true");
+            log.debug("buildMailProperties: SSL mode implicit (mail.{}.ssl.enable=true)", protocol);
         } else {
             properties.put("mail.imap.starttls.enable", "true");
             properties.put("mail.imap.starttls.required", "true");
+            log.debug("buildMailProperties: STARTTLS required for IMAP");
         }
         return properties;
     }
 
     private boolean shouldUseImplicitSsl(AppSettings settings) {
-        return Boolean.TRUE.equals(settings.getMailSslEnabled())
-                || settings.getMailPort() == null
-                || settings.getMailPort() == DEFAULT_IMAPS_PORT;
+        boolean sslFlag = Boolean.TRUE.equals(settings.getMailSslEnabled());
+        Integer port = settings.getMailPort();
+        boolean implicit = sslFlag || port == null || port == DEFAULT_IMAPS_PORT;
+        log.debug(
+                "shouldUseImplicitSsl: mailSslEnabled={} port={} imapsDefaultPort={} → useImplicitSsl={}",
+                sslFlag,
+                port,
+                DEFAULT_IMAPS_PORT,
+                implicit);
+        return implicit;
     }
 
     private boolean isUnsupportedSslMessage(Throwable throwable) {
@@ -483,20 +606,33 @@ public class EmailService {
             if (normalized.contains("unsupported or unrecognized ssl message")
                     || normalized.contains("ssl handshake")
                     || normalized.contains("unable to find valid certification path")) {
+                log.debug(
+                        "isUnsupportedSslMessage: matched ssl-related text on {}",
+                        throwable.getClass().getSimpleName());
                 return true;
             }
         }
-        return throwable.getCause() != null && isUnsupportedSslMessage(throwable.getCause());
+        if (throwable.getCause() != null) {
+            boolean nested = isUnsupportedSslMessage(throwable.getCause());
+            log.debug("isUnsupportedSslMessage: checking cause → {}", nested);
+            return nested;
+        }
+        log.debug("isUnsupportedSslMessage: no match for {}", throwable.getClass().getSimpleName());
+        return false;
     }
 
     private String getEmailId(Message message) throws MessagingException {
-        if (message instanceof MimeMessage) {
-            String messageId = ((MimeMessage) message).getMessageID();
+        if (message instanceof MimeMessage mimeMessage) {
+            String messageId = mimeMessage.getMessageID();
             if (messageId != null && !messageId.isBlank()) {
-                return messageId.trim();
+                String id = messageId.trim();
+                log.debug("getEmailId: Message-ID header msgNum={}", message.getMessageNumber());
+                return id;
             }
         }
-        return "MSG-" + message.getMessageNumber();
+        String synthetic = "MSG-" + message.getMessageNumber();
+        log.debug("getEmailId: fallback synthetic id={}", synthetic);
+        return synthetic;
     }
 
     /**
@@ -510,17 +646,40 @@ public class EmailService {
      */
     private void extractContentAndAttachments(Part part, StringBuilder contentBuilder,
                                               List<AttachmentDto> attachments, AtomicLong currentAttachmentSize) throws MessagingException, IOException {
+        extractContentAndAttachments(part, contentBuilder, attachments, currentAttachmentSize, 0);
+    }
+
+    private void extractContentAndAttachments(Part part, StringBuilder contentBuilder,
+                                              List<AttachmentDto> attachments, AtomicLong currentAttachmentSize,
+                                              int depth) throws MessagingException, IOException {
+        String contentType = part.getContentType();
+        log.debug(
+                "extractContentAndAttachments: depth={} contentType={} disposition={} fileName={} size={}",
+                depth,
+                contentType,
+                part.getDisposition(),
+                part.getFileName(),
+                part.getSize());
         if (part.isMimeType("text/plain")) {
-            contentBuilder.append((String) part.getContent());
+            String text = (String) part.getContent();
+            contentBuilder.append(text);
+            log.debug("extractContentAndAttachments: depth={} appended text/plain chars={}", depth, text.length());
         } else if (part.isMimeType("text/html")) {
             String html = (String) part.getContent();
             String text = Jsoup.parse(html).text();
             contentBuilder.append(text);
+            log.debug(
+                    "extractContentAndAttachments: depth={} text/html rawChars={} strippedChars={}",
+                    depth,
+                    html.length(),
+                    text.length());
         } else if (part.isMimeType("multipart/*")) {
             MimeMultipart mimeMultipart = (MimeMultipart) part.getContent();
-            for (int i = 0; i < mimeMultipart.getCount(); i++) {
+            int count = mimeMultipart.getCount();
+            log.debug("extractContentAndAttachments: depth={} multipart/* parts={}", depth, count);
+            for (int i = 0; i < count; i++) {
                 BodyPart bodyPart = mimeMultipart.getBodyPart(i);
-                extractContentAndAttachments(bodyPart, contentBuilder, attachments, currentAttachmentSize);
+                extractContentAndAttachments(bodyPart, contentBuilder, attachments, currentAttachmentSize, depth + 1);
             }
         } else {
             // This part is likely an attachment or an inline image
@@ -532,6 +691,10 @@ public class EmailService {
                     Part.INLINE.equalsIgnoreCase(disposition) ||
                     (fileName != null && !fileName.isBlank() && part.getSize() > 0)) {
 
+                log.debug(
+                        "extractContentAndAttachments: depth={} treating as attachment candidate fileName={}",
+                        depth,
+                        fileName);
                 long attachmentSize = part.getSize(); // This might be -1 if size is unknown
                 if (attachmentSize == -1) {
                     log.warn("Attachment '{}' has unknown size. Attempting to read to determine size.", fileName);
@@ -539,6 +702,10 @@ public class EmailService {
                 }
 
                 if (currentAttachmentSize.get() + attachmentSize > MAX_TOTAL_ATTACHMENT_SIZE) {
+                    log.debug(
+                            "extractContentAndAttachments: depth={} skip '{}' — would exceed cap (estimated)",
+                            depth,
+                            fileName);
                     log.warn("Skipping attachment '{}' (size: {} bytes) due to memory constraints. Total attachments would exceed {} MB.",
                             fileName, attachmentSize, MAX_TOTAL_ATTACHMENT_SIZE / (1024 * 1024));
                     return; // Skip this attachment
@@ -556,6 +723,10 @@ public class EmailService {
 
                     // Double-check size after reading, if original size was -1 or estimate was off
                     if (currentAttachmentSize.get() + actualSize > MAX_TOTAL_ATTACHMENT_SIZE) {
+                        log.debug(
+                                "extractContentAndAttachments: depth={} skip '{}' after read — exceeds cap",
+                                depth,
+                                fileName);
                         log.warn("Skipping attachment '{}' (actual size: {} bytes) after reading due to memory constraints. Total attachments would exceed {} MB.",
                                 fileName, actualSize, MAX_TOTAL_ATTACHMENT_SIZE / (1024 * 1024));
                         return;
@@ -572,8 +743,14 @@ public class EmailService {
                             fileName, actualSize, currentAttachmentSize.get());
 
                 } catch (IOException e) {
+                    log.debug("extractContentAndAttachments: depth={} IOException on '{}': {}", depth, fileName, e.getMessage());
                     log.error("Failed to read attachment '{}': {}", fileName, e.getMessage());
                 }
+            } else {
+                log.debug(
+                        "extractContentAndAttachments: depth={} non-text part not handled as attachment (mime={})",
+                        depth,
+                        contentType);
             }
         }
     }
