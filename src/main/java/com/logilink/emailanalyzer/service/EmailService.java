@@ -24,6 +24,7 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
 
 @Service
 public class EmailService {
@@ -32,6 +33,16 @@ public class EmailService {
     private static final int DEFAULT_LOOKBACK_DAYS = 30;
     private static final int DEFAULT_IMAPS_PORT = 993;
     private static final long MAX_TOTAL_ATTACHMENT_SIZE = 200 * 1024 * 1024; // 200 MB
+    /** Larger buffer = fewer read/write iterations for big attachments. */
+    private static final int ATTACHMENT_COPY_BUFFER_SIZE = 64 * 1024;
+    /**
+     * Beyond this, building a full Jsoup DOM is often disproportionately slow; use a fast tag stripper instead.
+     */
+    private static final int HTML_JSOUP_MAX_CHARS = 350_000;
+    private static final Pattern HTML_STRIP_SCRIPT = Pattern.compile("(?is)<script[^>]*>.*?</script>");
+    private static final Pattern HTML_STRIP_STYLE = Pattern.compile("(?is)<style[^>]*>.*?</style>");
+    private static final Pattern HTML_STRIP_TAGS = Pattern.compile("<[^>]+>");
+    private static final Pattern HTML_STRIP_WS = Pattern.compile("\\s+");
 
     private final AppSettingsService appSettingsService;
     private final int imapConnectionTimeoutMs;
@@ -635,6 +646,36 @@ public class EmailService {
         return synthetic;
     }
 
+    private static long elapsedMsSince(long startNano) {
+        return (System.nanoTime() - startNano) / 1_000_000L;
+    }
+
+    private static ByteArrayOutputStream newAttachmentBuffer(long reportedSizeBytes) {
+        if (reportedSizeBytes > 0 && reportedSizeBytes <= 50 * 1024 * 1024) {
+            return new ByteArrayOutputStream((int) reportedSizeBytes);
+        }
+        return new ByteArrayOutputStream(16_384);
+    }
+
+    /**
+     * Jsoup is accurate but slow on very large HTML; fast strip preserves throughput for newsletter-style messages.
+     */
+    private String htmlEmailToPlainText(String html) {
+        if (html.length() <= HTML_JSOUP_MAX_CHARS) {
+            return Jsoup.parse(html).text();
+        }
+        if (log.isDebugEnabled()) {
+            log.debug(
+                    "htmlEmailToPlainText: fast strip (chars={} > jsoupCap={})",
+                    html.length(),
+                    HTML_JSOUP_MAX_CHARS);
+        }
+        String s = HTML_STRIP_SCRIPT.matcher(html).replaceAll(" ");
+        s = HTML_STRIP_STYLE.matcher(s).replaceAll(" ");
+        s = HTML_STRIP_TAGS.matcher(s).replaceAll(" ");
+        return HTML_STRIP_WS.matcher(s).replaceAll(" ").trim();
+    }
+
     /**
      * Inline/attached images are ignored so newsletters and HTML signatures do not bloat attachment lists.
      */
@@ -677,115 +718,208 @@ public class EmailService {
     private void extractContentAndAttachments(Part part, StringBuilder contentBuilder,
                                               List<AttachmentDto> attachments, AtomicLong currentAttachmentSize,
                                               int depth) throws MessagingException, IOException {
+
+        long tPartStart = System.nanoTime();
+        String branch = "unknown";
         String contentType = part.getContentType();
-        log.debug(
-                "extractContentAndAttachments: depth={} contentType={} disposition={} fileName={} size={}",
-                depth,
-                contentType,
-                part.getDisposition(),
-                part.getFileName(),
-                part.getSize());
-        if (part.isMimeType("text/plain")) {
-            String text = (String) part.getContent();
-            contentBuilder.append(text);
-            log.debug("extractContentAndAttachments: depth={} appended text/plain chars={}", depth, text.length());
-        } else if (part.isMimeType("text/html")) {
-            String html = (String) part.getContent();
-            String text = Jsoup.parse(html).text();
-            contentBuilder.append(text);
+
+        if (log.isDebugEnabled()) {
             log.debug(
-                    "extractContentAndAttachments: depth={} text/html rawChars={} strippedChars={}",
+                    "extractContentAndAttachments: depth={} enter contentType={} disposition={} fileName={} size={}",
                     depth,
-                    html.length(),
-                    text.length());
-        } else if (part.isMimeType("multipart/*")) {
-            MimeMultipart mimeMultipart = (MimeMultipart) part.getContent();
-            int count = mimeMultipart.getCount();
-            log.debug("extractContentAndAttachments: depth={} multipart/* parts={}", depth, count);
-            for (int i = 0; i < count; i++) {
-                BodyPart bodyPart = mimeMultipart.getBodyPart(i);
-                extractContentAndAttachments(bodyPart, contentBuilder, attachments, currentAttachmentSize, depth + 1);
-            }
-        } else {
-            // This part is likely an attachment or an inline image
-            String disposition = part.getDisposition();
-            String rawName = part.getFileName();
-            String fileName = rawName != null ? MimeUtility.decodeText(rawName) : null;
+                    contentType,
+                    part.getDisposition(),
+                    part.getFileName(),
+                    part.getSize());
+        }
 
-            // Check if it's an attachment or an inline file with a filename
-            if (Part.ATTACHMENT.equalsIgnoreCase(disposition) ||
-                    Part.INLINE.equalsIgnoreCase(disposition) ||
-                    (fileName != null && !fileName.isBlank() && part.getSize() > 0)) {
-
-                if (isSkippableImagePart(part, fileName)) {
+        try {
+            if (part.isMimeType("text/plain")) {
+                branch = "text/plain";
+                long t0 = System.nanoTime();
+                String text = (String) part.getContent();
+                long getContentMs = elapsedMsSince(t0);
+                contentBuilder.append(text);
+                if (log.isDebugEnabled()) {
                     log.debug(
-                            "extractContentAndAttachments: depth={} skip image (not an attachment) fileName={} contentType={}",
+                            "extractContentAndAttachments: PART_TIMING detail depth={} branch={} getContentMs={} plainChars={}",
                             depth,
-                            fileName,
-                            contentType);
-                    return;
+                            branch,
+                            getContentMs,
+                            text.length());
                 }
-
-                log.debug(
-                        "extractContentAndAttachments: depth={} treating as attachment candidate fileName={}",
-                        depth,
-                        fileName);
-                long attachmentSize = part.getSize(); // This might be -1 if size is unknown
-                if (attachmentSize == -1) {
-                    log.warn("Attachment '{}' has unknown size. Attempting to read to determine size.", fileName);
-                    // If size is unknown, we'll read it and then check. This is less efficient.
-                }
-
-                if (currentAttachmentSize.get() + attachmentSize > MAX_TOTAL_ATTACHMENT_SIZE) {
+            } else if (part.isMimeType("text/html")) {
+                branch = "text/html";
+                long t0 = System.nanoTime();
+                String html = (String) part.getContent();
+                long getContentMs = elapsedMsSince(t0);
+                long t1 = System.nanoTime();
+                String text = htmlEmailToPlainText(html);
+                long toPlainMs = elapsedMsSince(t1);
+                contentBuilder.append(text);
+                if (log.isDebugEnabled()) {
                     log.debug(
-                            "extractContentAndAttachments: depth={} skip '{}' — would exceed cap (estimated)",
+                            "extractContentAndAttachments: depth={} text/html rawChars={} strippedChars={}",
                             depth,
-                            fileName);
-                    log.warn("Skipping attachment '{}' (size: {} bytes) due to memory constraints. Total attachments would exceed {} MB.",
-                            fileName, attachmentSize, MAX_TOTAL_ATTACHMENT_SIZE / (1024 * 1024));
-                    return; // Skip this attachment
+                            html.length(),
+                            text.length());
+                    log.debug(
+                            "extractContentAndAttachments: PART_TIMING detail depth={} branch={} getContentMs={} htmlToPlainMs={}",
+                            depth,
+                            branch,
+                            getContentMs,
+                            toPlainMs);
                 }
+            } else if (part.isMimeType("multipart/*")) {
+                branch = "multipart/*";
+                long t0 = System.nanoTime();
+                MimeMultipart mimeMultipart = (MimeMultipart) part.getContent();
+                long getContentMs = elapsedMsSince(t0);
+                int count = mimeMultipart.getCount();
+                if (log.isDebugEnabled()) {
+                    log.debug(
+                            "extractContentAndAttachments: depth={} multipart parts={} getContentMs={}",
+                            depth,
+                            count,
+                            getContentMs);
+                }
+                long tChildren = System.nanoTime();
+                for (int i = 0; i < count; i++) {
+                    BodyPart bodyPart = mimeMultipart.getBodyPart(i);
+                    extractContentAndAttachments(bodyPart, contentBuilder, attachments, currentAttachmentSize, depth + 1);
+                }
+                if (log.isDebugEnabled()) {
+                    log.debug(
+                            "extractContentAndAttachments: PART_TIMING detail depth={} branch={} recurseChildrenMs={} childCount={}",
+                            depth,
+                            branch,
+                            elapsedMsSince(tChildren),
+                            count);
+                }
+            } else {
+                branch = "leaf_other";
+                String disposition = part.getDisposition();
+                String rawName = part.getFileName();
+                String fileName = rawName != null ? MimeUtility.decodeText(rawName) : null;
 
-                try (InputStream is = part.getInputStream();
-                     ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-                    byte[] buffer = new byte[4096];
-                    int bytesRead;
-                    while ((bytesRead = is.read(buffer)) != -1) {
-                        baos.write(buffer, 0, bytesRead);
-                    }
-                    byte[] data = baos.toByteArray();
-                    long actualSize = data.length;
+                if (Part.ATTACHMENT.equalsIgnoreCase(disposition) ||
+                        Part.INLINE.equalsIgnoreCase(disposition) ||
+                        (fileName != null && !fileName.isBlank() && part.getSize() > 0)) {
 
-                    // Double-check size after reading, if original size was -1 or estimate was off
-                    if (currentAttachmentSize.get() + actualSize > MAX_TOTAL_ATTACHMENT_SIZE) {
-                        log.debug(
-                                "extractContentAndAttachments: depth={} skip '{}' after read — exceeds cap",
-                                depth,
-                                fileName);
-                        log.warn("Skipping attachment '{}' (actual size: {} bytes) after reading due to memory constraints. Total attachments would exceed {} MB.",
-                                fileName, actualSize, MAX_TOTAL_ATTACHMENT_SIZE / (1024 * 1024));
+                    if (isSkippableImagePart(part, fileName)) {
+                        branch = "skip_image";
+                        if (log.isDebugEnabled()) {
+                            log.debug(
+                                    "extractContentAndAttachments: depth={} skip image fileName={} contentType={}",
+                                    depth,
+                                    fileName,
+                                    contentType);
+                        }
                         return;
                     }
 
-                    attachments.add(AttachmentDto.builder()
-                            .fileName(fileName)
-                            .contentType(part.getContentType())
-                            .data(data)
-                            .size(actualSize)
-                            .build());
-                    currentAttachmentSize.addAndGet(actualSize);
-                    log.debug("Added attachment '{}' of size {} bytes. Total attachments size: {} bytes.",
-                            fileName, actualSize, currentAttachmentSize.get());
+                    branch = "attachment_read";
+                    if (log.isDebugEnabled()) {
+                        log.debug(
+                                "extractContentAndAttachments: depth={} attachment candidate fileName={}",
+                                depth,
+                                fileName);
+                    }
+                    long attachmentSize = part.getSize();
+                    if (attachmentSize == -1) {
+                        log.warn("Attachment '{}' has unknown size. Attempting to read to determine size.", fileName);
+                    }
 
-                } catch (IOException e) {
-                    log.debug("extractContentAndAttachments: depth={} IOException on '{}': {}", depth, fileName, e.getMessage());
-                    log.error("Failed to read attachment '{}': {}", fileName, e.getMessage());
+                    if (currentAttachmentSize.get() + attachmentSize > MAX_TOTAL_ATTACHMENT_SIZE) {
+                        branch = "attachment_skip_cap_estimate";
+                        if (log.isDebugEnabled()) {
+                            log.debug(
+                                    "extractContentAndAttachments: depth={} skip '{}' — would exceed cap (estimated)",
+                                    depth,
+                                    fileName);
+                        }
+                        log.warn("Skipping attachment '{}' (size: {} bytes) due to memory constraints. Total attachments would exceed {} MB.",
+                                fileName, attachmentSize, MAX_TOTAL_ATTACHMENT_SIZE / (1024 * 1024));
+                        return;
+                    }
+
+                    try (InputStream is = part.getInputStream();
+                         ByteArrayOutputStream baos = newAttachmentBuffer(attachmentSize)) {
+                        long tRead = System.nanoTime();
+                        byte[] buffer = new byte[ATTACHMENT_COPY_BUFFER_SIZE];
+                        int bytesRead;
+                        while ((bytesRead = is.read(buffer)) != -1) {
+                            baos.write(buffer, 0, bytesRead);
+                        }
+                        long readMs = elapsedMsSince(tRead);
+                        byte[] data = baos.toByteArray();
+                        long actualSize = data.length;
+
+                        if (log.isDebugEnabled()) {
+                            log.debug(
+                                    "extractContentAndAttachments: PART_TIMING detail depth={} branch={} streamReadMs={} bytes={}",
+                                    depth,
+                                    branch,
+                                    readMs,
+                                    actualSize);
+                        }
+
+                        if (currentAttachmentSize.get() + actualSize > MAX_TOTAL_ATTACHMENT_SIZE) {
+                            branch = "attachment_skip_cap_after_read";
+                            if (log.isDebugEnabled()) {
+                                log.debug(
+                                        "extractContentAndAttachments: depth={} skip '{}' after read — exceeds cap",
+                                        depth,
+                                        fileName);
+                            }
+                            log.warn("Skipping attachment '{}' (actual size: {} bytes) after reading due to memory constraints. Total attachments would exceed {} MB.",
+                                    fileName, actualSize, MAX_TOTAL_ATTACHMENT_SIZE / (1024 * 1024));
+                            return;
+                        }
+
+                        attachments.add(AttachmentDto.builder()
+                                .fileName(fileName)
+                                .contentType(part.getContentType())
+                                .data(data)
+                                .size(actualSize)
+                                .build());
+                        currentAttachmentSize.addAndGet(actualSize);
+                        if (log.isDebugEnabled()) {
+                            log.debug(
+                                    "Added attachment '{}' size={} bytes cumulativeAttachBytes={}",
+                                    fileName,
+                                    actualSize,
+                                    currentAttachmentSize.get());
+                        }
+
+                    } catch (IOException e) {
+                        branch = "attachment_io_error";
+                        if (log.isDebugEnabled()) {
+                            log.debug(
+                                    "extractContentAndAttachments: depth={} IOException on '{}': {}",
+                                    depth,
+                                    fileName,
+                                    e.getMessage());
+                        }
+                        log.error("Failed to read attachment '{}': {}", fileName, e.getMessage());
+                    }
+                } else {
+                    branch = "ignored_leaf";
+                    if (log.isDebugEnabled()) {
+                        log.debug(
+                                "extractContentAndAttachments: depth={} leaf not treated as attachment mime={}",
+                                depth,
+                                contentType);
+                    }
                 }
-            } else {
+            }
+        } finally {
+            if (log.isDebugEnabled()) {
                 log.debug(
-                        "extractContentAndAttachments: depth={} non-text part not handled as attachment (mime={})",
+                        "extractContentAndAttachments: PART_TIMING depth={} branch={} totalMs={}",
                         depth,
-                        contentType);
+                        branch,
+                        elapsedMsSince(tPartStart));
             }
         }
     }
