@@ -6,11 +6,17 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface AppSettingsRepository extends JpaRepository<AppSettings, Long> {
     Optional<AppSettings> findFirstByActiveTrue();
+
+    /**
+     * Active profile first, then others by last update time (newest first).
+     */
+    List<AppSettings> findAllByOrderByActiveDescUpdatedAtDesc();
 
     boolean existsByActiveTrueAndIdNot(Long id);
 

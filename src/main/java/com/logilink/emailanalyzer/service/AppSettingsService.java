@@ -69,7 +69,7 @@ public class AppSettingsService {
 
     @Transactional(readOnly = true)
     public List<AppSettings> listAll() {
-        return repository.findAll(Sort.by(Sort.Direction.ASC, "id"));
+        return repository.findAllByOrderByActiveDescUpdatedAtDesc();
     }
 
     @Transactional(readOnly = true)

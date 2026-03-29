@@ -3,6 +3,8 @@ package com.logilink.emailanalyzer.domain;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.Instant;
+
 @Entity
 @Table(name = "app_settings")
 @Getter
@@ -78,4 +80,26 @@ public class AppSettings {
 
     @Column(name = "active")
     private Boolean active;
+
+    @Column(name = "created_at", nullable = false, updatable = false, columnDefinition = "DATETIME(6)")
+    private Instant createdAt;
+
+    @Column(name = "updated_at", nullable = false, columnDefinition = "DATETIME(6)")
+    private Instant updatedAt;
+
+    @PrePersist
+    void prePersistTimestamps() {
+        Instant now = Instant.now();
+        if (createdAt == null) {
+            createdAt = now;
+        }
+        if (updatedAt == null) {
+            updatedAt = now;
+        }
+    }
+
+    @PreUpdate
+    void preUpdateTimestamp() {
+        updatedAt = Instant.now();
+    }
 }
