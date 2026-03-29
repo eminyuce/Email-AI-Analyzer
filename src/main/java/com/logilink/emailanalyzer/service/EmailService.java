@@ -10,7 +10,6 @@ import jakarta.mail.internet.InternetHeaders;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
 import jakarta.mail.internet.MimeUtility;
-import jakarta.mail.search.*;
 import org.jsoup.Jsoup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -168,21 +167,46 @@ public class EmailService {
                     messageNumberLimit,
                     fromMessageNumber);
 
-            // Build search terms
-            SearchTerm dateRangeTerm = new AndTerm(
-                    new ReceivedDateTerm(ComparisonTerm.GE, startDate),
-                    new ReceivedDateTerm(ComparisonTerm.LE, endDate)
-            );
-
-            SearchTerm combinedTerm = new AndTerm(dateRangeTerm, new MessageNumberTerm(fromMessageNumber));
-
-            if (unreadOnly) {
-                SearchTerm unreadTerm = new FlagTerm(new Flags(Flags.Flag.SEEN), false);
-                combinedTerm = new AndTerm(combinedTerm, unreadTerm);
+            if (totalMessages == 0) {
+                return List.of();
             }
 
-            Message[] foundMessages = emailFolder.search(combinedTerm);
-            log.debug("fetchMessages: search returned {} raw matches", foundMessages.length);
+            // Avoid Folder.search(): on Gmail (and some other hosts) IMAP SEARCH with date terms can run
+            // for a long time or appear busy when we already restrict by message sequence number.
+            Message[] slice = emailFolder.getMessages(fromMessageNumber, totalMessages);
+            FetchProfile filterProfile = new FetchProfile();
+            filterProfile.add(FetchProfile.Item.ENVELOPE);
+            filterProfile.add(FetchProfile.Item.FLAGS);
+            if (emailFolder instanceof UIDFolder) {
+                filterProfile.add(UIDFolder.FetchProfileItem.UID);
+            }
+            long filterFetchStart = System.currentTimeMillis();
+            emailFolder.fetch(slice, filterProfile);
+            log.debug(
+                    "fetchMessages: slice FETCH (ENVELOPE,FLAGS,UID) for msg# {}..{} count={} took {} ms",
+                    fromMessageNumber,
+                    totalMessages,
+                    slice.length,
+                    System.currentTimeMillis() - filterFetchStart);
+
+            List<Message> matched = new ArrayList<>(slice.length);
+            for (Message m : slice) {
+                try {
+                    if (matchesInboxFetchFilters(m, startDate, endDate, unreadOnly)) {
+                        matched.add(m);
+                    }
+                } catch (MessagingException e) {
+                    log.debug(
+                            "fetchMessages: skip msgNum {} in client filter: {}",
+                            m.getMessageNumber(),
+                            e.getMessage());
+                }
+            }
+            Message[] foundMessages = matched.toArray(Message[]::new);
+            log.debug(
+                    "fetchMessages: client-side filter → {} matches from {} slice messages (no server SEARCH)",
+                    foundMessages.length,
+                    slice.length);
 
             log.info("Found {} {} messages (msg# >= {}) via {}. Limiting to max {}",
                     foundMessages.length,
@@ -276,6 +300,22 @@ public class EmailService {
         } catch (MessagingException e) {
             return null;
         }
+    }
+
+    /**
+     * Same criteria as the former server-side ANDterm (date window + optional unseen), applied to an
+     * already-sequence-limited slice so we do not depend on {@link Folder#search}.
+     */
+    private boolean matchesInboxFetchFilters(Message m, Date startDate, Date endDate, boolean unreadOnly)
+            throws MessagingException {
+        Date d = getMessageDate(m);
+        if (d == null) {
+            return false;
+        }
+        if (d.before(startDate) || d.after(endDate)) {
+            return false;
+        }
+        return !unreadOnly || !m.isSet(Flags.Flag.SEEN);
     }
 
     private List<FetchedEmailDto> materializeToDtos(List<Message> messages) {
