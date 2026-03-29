@@ -636,6 +636,31 @@ public class EmailService {
     }
 
     /**
+     * Inline/attached images are ignored so newsletters and HTML signatures do not bloat attachment lists.
+     */
+    private boolean isSkippableImagePart(Part part, String fileName) throws MessagingException {
+        if (part.isMimeType("image/*")) {
+            return true;
+        }
+        if (fileName == null || fileName.isBlank()) {
+            return false;
+        }
+        String n = fileName.toLowerCase(Locale.ROOT);
+        return n.endsWith(".png")
+                || n.endsWith(".jpg")
+                || n.endsWith(".jpeg")
+                || n.endsWith(".gif")
+                || n.endsWith(".webp")
+                || n.endsWith(".bmp")
+                || n.endsWith(".svg")
+                || n.endsWith(".ico")
+                || n.endsWith(".tif")
+                || n.endsWith(".tiff")
+                || n.endsWith(".heic")
+                || n.endsWith(".avif");
+    }
+
+    /**
      * Recursively extracts content (text/plain, text/html) and attachments from a Part.
      * Implements memory management for attachments, skipping if total size exceeds MAX_TOTAL_ATTACHMENT_SIZE.
      *
@@ -684,12 +709,22 @@ public class EmailService {
         } else {
             // This part is likely an attachment or an inline image
             String disposition = part.getDisposition();
-            String fileName = MimeUtility.decodeText(part.getFileName());
+            String rawName = part.getFileName();
+            String fileName = rawName != null ? MimeUtility.decodeText(rawName) : null;
 
             // Check if it's an attachment or an inline file with a filename
             if (Part.ATTACHMENT.equalsIgnoreCase(disposition) ||
                     Part.INLINE.equalsIgnoreCase(disposition) ||
                     (fileName != null && !fileName.isBlank() && part.getSize() > 0)) {
+
+                if (isSkippableImagePart(part, fileName)) {
+                    log.debug(
+                            "extractContentAndAttachments: depth={} skip image (not an attachment) fileName={} contentType={}",
+                            depth,
+                            fileName,
+                            contentType);
+                    return;
+                }
 
                 log.debug(
                         "extractContentAndAttachments: depth={} treating as attachment candidate fileName={}",
