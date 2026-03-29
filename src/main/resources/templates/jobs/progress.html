@@ -82,6 +82,44 @@
         </div>
     </div>
 
+    <div class="card">
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div>
+                <strong>Live Logs</strong>
+                <div class="small text-muted">Newest at top · refresh every 3s</div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <button type="button" id="btn-clear-logs" class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-trash me-1"></i>Clear logs
+                </button>
+                <a id="btn-download-logs" class="btn btn-sm btn-outline-primary"
+                   th:href="@{/api/jobs/progress/logs-export}">
+                    <i class="bi bi-download me-1"></i>Download .txt
+                </a>
+                <input id="logFilter" type="text" class="form-control form-control-sm" placeholder="Filter logs"
+                       style="width: 200px;">
+                <div class="form-check form-switch m-0">
+                    <input class="form-check-input" type="checkbox" id="autoScroll" checked>
+                    <label class="form-check-label small" for="autoScroll">Jump to newest</label>
+                </div>
+                <div id="pollSpinner" class="spinner-border spinner-border-sm text-primary d-none" role="status"></div>
+            </div>
+        </div>
+        <div id="logContainer" class="card-body" style="height: 420px; overflow-y: auto;">
+            <table class="table table-sm table-striped align-middle mb-0">
+                <thead class="table-light sticky-top">
+                <tr>
+                    <th style="width: 180px;">Timestamp</th>
+                    <th style="width: 110px;">Level</th>
+                    <th style="width: 130px;">Status</th>
+                    <th>Message</th>
+                </tr>
+                </thead>
+                <tbody id="logTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
     <script th:inline="javascript">
         const statusSentence = document.getElementById('statusSentence');
         const statusReason = document.getElementById('statusReason');
@@ -93,6 +131,11 @@
         const totalCount = document.getElementById('totalCount');
         const runMeta = document.getElementById('runMeta');
         const progressBar = document.getElementById('progressBar');
+        const logTableBody = document.getElementById('logTableBody');
+        const logFilter = document.getElementById('logFilter');
+        const autoScroll = document.getElementById('autoScroll');
+        const logContainer = document.getElementById('logContainer');
+        const pollSpinner = document.getElementById('pollSpinner');
         const activeSettingsLink = document.getElementById('activeSettingsLink');
         const activeSettingId = document.getElementById('activeSettingId');
         const activeMailHost = document.getElementById('activeMailHost');
@@ -104,6 +147,8 @@
         const activeRangeAndMax = document.getElementById('activeRangeAndMax');
 
         let lastLogId = 0;
+        const knownLogIds = new Set();
+        const allRows = [];
         let pollInFlight = false;
 
         function toBadgeClass(status) {
@@ -171,11 +216,69 @@
             progressBar.className = 'progress-bar progress-bar-striped' + (statusText === 'RUNNING' ? ' progress-bar-animated' : '');
         }
 
+        function createLogRow(entry) {
+            const tr = document.createElement('tr');
+            if (entry.level === 'ERROR') {
+                tr.classList.add('table-danger');
+            } else if (entry.level === 'WARN') {
+                tr.classList.add('table-warning');
+            }
+            const timestamp = document.createElement('td');
+            timestamp.textContent = toLocalTime(entry.timestamp);
+            const level = document.createElement('td');
+            level.textContent = entry.level;
+            const status = document.createElement('td');
+            status.textContent = entry.status;
+            const message = document.createElement('td');
+            message.textContent = entry.message;
+            tr.appendChild(timestamp);
+            tr.appendChild(level);
+            tr.appendChild(status);
+            tr.appendChild(message);
+            return tr;
+        }
+
+        function appendLogRows(entries) {
+            if (!entries || entries.length === 0) {
+                return;
+            }
+            for (const entry of entries) {
+                if (knownLogIds.has(entry.id)) {
+                    continue;
+                }
+                knownLogIds.add(entry.id);
+                lastLogId = Math.max(lastLogId, entry.id);
+                const tr = createLogRow(entry);
+                const msg = entry.message != null ? entry.message : '';
+                allRows.push({
+                    id: entry.id,
+                    tr: tr,
+                    searchable: (entry.level + ' ' + entry.status + ' ' + msg).toLowerCase()
+                });
+            }
+            applyFilter();
+            if (autoScroll.checked) {
+                logContainer.scrollTop = 0;
+            }
+        }
+
+        function applyFilter() {
+            const filter = (logFilter.value || '').toLowerCase().trim();
+            logTableBody.innerHTML = '';
+            const sorted = [...allRows].sort((a, b) => b.id - a.id);
+            for (const row of sorted) {
+                if (!filter || row.searchable.includes(filter)) {
+                    logTableBody.appendChild(row.tr);
+                }
+            }
+        }
+
         async function pollProgress() {
             if (pollInFlight) {
                 return;
             }
             pollInFlight = true;
+            pollSpinner.classList.remove('d-none');
             try {
                 const response = await fetch('/api/jobs/progress?sinceId=' + encodeURIComponent(lastLogId));
                 if (!response.ok) {
@@ -185,15 +288,36 @@
                 updateActiveSettings(payload.activeSettings);
                 const snapshot = payload.progress || {};
                 updateHeader(snapshot);
-                if (snapshot.lastLogId != null && snapshot.lastLogId >= lastLogId) {
-                    lastLogId = snapshot.lastLogId;
-                }
+                appendLogRows(snapshot.logs || []);
             } catch (e) {
                 // Keep polling even if one request fails.
             } finally {
                 pollInFlight = false;
+                pollSpinner.classList.add('d-none');
             }
         }
+
+        logFilter.addEventListener('input', applyFilter);
+
+        const clearLogsUrl = /*[[@{/api/jobs/progress/clear-logs}]]*/ '/api/jobs/progress/clear-logs';
+
+        document.getElementById('btn-clear-logs').addEventListener('click', async function() {
+            if (!confirm('Clear all live logs? Buffered lines are removed on the server.')) {
+                return;
+            }
+            try {
+                const response = await fetch(clearLogsUrl, { method: 'POST' });
+                if (!response.ok) {
+                    throw new Error('Clear failed');
+                }
+                knownLogIds.clear();
+                allRows.length = 0;
+                logTableBody.innerHTML = '';
+                lastLogId = 0;
+            } catch (e) {
+                alert('Could not clear logs: ' + e.message);
+            }
+        });
 
         pollProgress();
         setInterval(pollProgress, 3000);

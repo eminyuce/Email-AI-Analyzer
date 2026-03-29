@@ -150,6 +150,34 @@ public class JobProgressService {
         append(normalizedLevel, "SCHEDULER", message);
     }
 
+    /**
+     * Removes all buffered live log lines and resets log id sequence. Job status and counters are unchanged.
+     */
+    public synchronized void clearLogs() {
+        logs.clear();
+        nextLogId.set(0);
+    }
+
+    /**
+     * All buffered log lines as plain text, one per line, newest first (tab-separated fields).
+     */
+    public synchronized String exportLogsAsTextNewestFirst() {
+        List<ProgressLogEntry> copy = new ArrayList<>(logs);
+        copy.sort(Comparator.comparingLong(ProgressLogEntry::id).reversed());
+        StringBuilder sb = new StringBuilder(Math.min(256 + copy.size() * 64, 256_000));
+        sb.append("timestamp\tlevel\tstatus\tmessage\n");
+        for (ProgressLogEntry e : copy) {
+            String msg = e.message() == null ? "" : e.message();
+            msg = msg.replace('\t', ' ').replace('\r', ' ').replace('\n', ' ');
+            sb.append(e.timestamp().toString()).append('\t')
+                    .append(e.level()).append('\t')
+                    .append(e.status()).append('\t')
+                    .append(msg)
+                    .append('\n');
+        }
+        return sb.toString();
+    }
+
     public ProgressSnapshot snapshot(long sinceId) {
         List<ProgressLogEntry> selectedLogs = new ArrayList<>();
         for (ProgressLogEntry entry : logs) {

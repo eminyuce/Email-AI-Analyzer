@@ -3,13 +3,20 @@ package com.logilink.emailanalyzer.controller;
 import com.logilink.emailanalyzer.domain.AppSettings;
 import com.logilink.emailanalyzer.service.AppSettingsService;
 import com.logilink.emailanalyzer.service.JobProgressService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 @Controller
 @RequestMapping
@@ -51,6 +58,23 @@ public class JobProgressController {
                 active.getSchedulerMaxEmails()
         );
         return new ProgressPageSnapshot(progress, settings);
+    }
+
+    @PostMapping("/api/jobs/progress/clear-logs")
+    @ResponseBody
+    public Map<String, Object> clearProgressLogs() {
+        jobProgressService.clearLogs();
+        return Map.of("success", true);
+    }
+
+    @GetMapping("/api/jobs/progress/logs-export")
+    public ResponseEntity<byte[]> exportProgressLogs() {
+        String body = jobProgressService.exportLogsAsTextNewestFirst();
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"email-job-live-logs.txt\"")
+                .contentType(MediaType.parseMediaType("text/plain;charset=UTF-8"))
+                .body(bytes);
     }
 
     public record ActiveSettingsSummary(
