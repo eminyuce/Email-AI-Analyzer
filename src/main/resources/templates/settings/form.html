@@ -108,6 +108,7 @@
                     </button>
                 </div>
                 <div class="card-body">
+                    <input type="hidden" th:field="*{llmModel}" id="llmModelHidden">
                     <div class="row g-3">
                         <div class="col-md-12">
                             <label for="llmProvider" class="form-label">Provider</label>
@@ -126,10 +127,24 @@
                                 comes from <code>groq.api.url</code>).
                             </div>
                         </div>
-                        <div class="col-md-8">
-                            <label for="llmModel" class="form-label">Model name</label>
-                            <input id="llmModel" type="text" class="form-control" th:field="*{llmModel}"
-                                   placeholder="e.g. llama3.2 or llama3-70b-8192 (Groq)">
+                        <div class="col-md-8" id="llmModelOllamaWrap">
+                            <label for="llmModelSelect" class="form-label">Model</label>
+                            <div class="input-group">
+                                <select id="llmModelSelect" class="form-select"
+                                        aria-describedby="ollamaModelsHint"></select>
+                                <button type="button" id="btn-refresh-ollama-models" class="btn btn-outline-secondary"
+                                        title="Reload models from Ollama (GET /api/tags)">
+                                    Refresh
+                                </button>
+                            </div>
+                            <div class="form-text" id="ollamaModelsHint">Loads models from your Ollama endpoint.</div>
+                        </div>
+                        <div class="col-md-8 d-none" id="llmModelGroqWrap">
+                            <label for="llmModelText" class="form-label">Model name</label>
+                            <input id="llmModelText" type="text" class="form-control"
+                                   autocomplete="off"
+                                   placeholder="e.g. llama3-70b-8192">
+                            <div class="form-text">Groq model id (free text).</div>
                         </div>
                         <div class="col-md-4">
                             <label for="llmTemperature" class="form-label">Temperature</label>
@@ -309,8 +324,133 @@
                 : 'Required for Ollama. Ignored when using Groq (base URL comes from application configuration).';
         }
 
-        document.getElementById('llmProvider').addEventListener('change', syncLlmUrlHint);
+        const ollamaTagsUrl = /*[[@{/settings/ollama/tags}]]*/ '/settings/ollama/tags';
+
+        function applyLlmModelToHidden() {
+            const prov = document.getElementById('llmProvider').value;
+            const hidden = document.getElementById('llmModelHidden');
+            if (prov === 'groq') {
+                hidden.value = document.getElementById('llmModelText').value;
+            } else {
+                const sel = document.getElementById('llmModelSelect');
+                hidden.value = sel.value || '';
+            }
+        }
+
+        function syncLlmModelControlsFromProviderChange() {
+            const isGroq = document.getElementById('llmProvider').value === 'groq';
+            const hidden = document.getElementById('llmModelHidden');
+            const ollamaWrap = document.getElementById('llmModelOllamaWrap');
+            const groqWrap = document.getElementById('llmModelGroqWrap');
+            if (isGroq) {
+                if (!ollamaWrap.classList.contains('d-none')) {
+                    hidden.value = document.getElementById('llmModelSelect').value;
+                }
+                ollamaWrap.classList.add('d-none');
+                groqWrap.classList.remove('d-none');
+                document.getElementById('llmModelText').value = hidden.value || '';
+            } else {
+                if (!groqWrap.classList.contains('d-none')) {
+                    hidden.value = document.getElementById('llmModelText').value;
+                }
+                groqWrap.classList.add('d-none');
+                ollamaWrap.classList.remove('d-none');
+                refreshOllamaModels();
+            }
+        }
+
+        async function refreshOllamaModels() {
+            const baseUrl = document.getElementById('llmUrl').value.trim();
+            const hint = document.getElementById('ollamaModelsHint');
+            const sel = document.getElementById('llmModelSelect');
+            const hidden = document.getElementById('llmModelHidden');
+            hint.classList.remove('text-danger');
+            if (!baseUrl) {
+                hint.textContent = 'Enter Ollama endpoint URL, then click Refresh.';
+                sel.innerHTML = '';
+                const cur = hidden.value;
+                if (cur) {
+                    const opt = document.createElement('option');
+                    opt.value = cur;
+                    opt.textContent = cur;
+                    sel.appendChild(opt);
+                    sel.value = cur;
+                }
+                return;
+            }
+            hint.textContent = 'Loading models…';
+            const url = ollamaTagsUrl + '?baseUrl=' + encodeURIComponent(baseUrl);
+            try {
+                const r = await fetch(url);
+                const data = await r.json();
+                if (!r.ok) {
+                    const err = (data && data.error) ? data.error : 'Failed to load models';
+                    hint.textContent = err;
+                    hint.classList.add('text-danger');
+                    sel.innerHTML = '';
+                    const cur = hidden.value;
+                    if (cur) {
+                        const opt = document.createElement('option');
+                        opt.value = cur;
+                        opt.textContent = cur + ' (could not verify)';
+                        sel.appendChild(opt);
+                        sel.value = cur;
+                    }
+                    return;
+                }
+                const names = Array.isArray(data) ? data : [];
+                sel.innerHTML = '';
+                for (const n of names) {
+                    const opt = document.createElement('option');
+                    opt.value = n;
+                    opt.textContent = n;
+                    sel.appendChild(opt);
+                }
+                const current = hidden.value;
+                if (current && names.indexOf(current) === -1) {
+                    const opt = document.createElement('option');
+                    opt.value = current;
+                    opt.textContent = current + ' (not in server list)';
+                    sel.appendChild(opt);
+                }
+                if (current) {
+                    sel.value = current;
+                }
+                hidden.value = sel.value || hidden.value;
+                hint.textContent = names.length
+                    ? names.length + ' model(s) from Ollama.'
+                    : 'No models reported by Ollama (pull a model first).';
+            } catch (e) {
+                hint.textContent = 'Request failed: ' + e.message;
+                hint.classList.add('text-danger');
+            }
+        }
+
+        document.getElementById('llmModelText').addEventListener('input', applyLlmModelToHidden);
+        document.getElementById('llmModelSelect').addEventListener('change', applyLlmModelToHidden);
+        document.getElementById('btn-refresh-ollama-models').addEventListener('click', refreshOllamaModels);
+        document.getElementById('settingsForm').addEventListener('submit', applyLlmModelToHidden);
+
+        document.getElementById('llmProvider').addEventListener('change', function() {
+            syncLlmUrlHint();
+            syncLlmModelControlsFromProviderChange();
+        });
         syncLlmUrlHint();
+        (function initLlmModelUi() {
+            const isGroq = document.getElementById('llmProvider').value === 'groq';
+            const hidden = document.getElementById('llmModelHidden');
+            const ollamaWrap = document.getElementById('llmModelOllamaWrap');
+            const groqWrap = document.getElementById('llmModelGroqWrap');
+            if (isGroq) {
+                ollamaWrap.classList.add('d-none');
+                groqWrap.classList.remove('d-none');
+                document.getElementById('llmModelText').value = hidden.value || '';
+            } else {
+                groqWrap.classList.add('d-none');
+                ollamaWrap.classList.remove('d-none');
+                refreshOllamaModels();
+            }
+        })();
     </script>
 </div>
 </body>

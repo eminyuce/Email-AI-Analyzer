@@ -7,6 +7,11 @@
 </head>
 <body>
 <div layout:fragment="content">
+    <style>
+        .settings-profile-list tbody tr.settings-profile-active > td {
+            background-color: #ffe5e5 !important;
+        }
+    </style>
     <div class="d-flex justify-content-between align-items-center pt-3 pb-2 mb-3 border-bottom">
         <h1 class="h2">Settings Profiles</h1>
         <div class="d-flex align-items-center gap-2">
@@ -24,35 +29,43 @@
     <div class="card">
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-striped align-middle mb-0">
+                <table class="table table-striped align-middle mb-0 settings-profile-list">
                     <thead>
                     <tr>
                         <th>ID</th>
-                        <th>Status</th>
-                        <th>Mail Host</th>
                         <th>LLM</th>
-                        <th>Batch (days / max)</th>
+                        <th>Model</th>
+                        <th>Email</th>
+                        <th>System prompt</th>
                         <th class="text-end">Actions</th>
                     </tr>
                     </thead>
                     <tbody>
-                    <tr th:each="p : ${profiles}">
-                        <td th:text="${p.id}">1</td>
+                    <tr th:each="p : ${profiles}"
+                        th:classappend="${p.id == activeProfileId} ? 'settings-profile-active' : ''">
                         <td>
-                            <span class="badge bg-success" th:if="${p.id == activeProfileId}">Active</span>
-                            <span class="badge bg-secondary" th:if="${p.id != activeProfileId}">Inactive</span>
+                            <span th:text="${p.id}">1</span>
+                            <span class="badge text-bg-dark ms-1 text-uppercase"
+                                  th:if="${p.id == activeProfileId}"
+                                  title="This profile is used for email processing">Active</span>
                         </td>
-                        <td th:text="${p.mailHost != null ? p.mailHost : '-'}">-</td>
-                        <td>
-                            <span class="badge bg-secondary me-1"
+                        <td class="small">
+                            <span class="badge bg-secondary text-uppercase"
                                   th:text="${p.llmProvider != null ? p.llmProvider : 'ollama'}">ollama</span>
-                            <span th:text="${p.llmModel != null ? p.llmModel : '-'}">-</span>
+                            <div class="text-muted text-break mt-1"
+                                 th:if="${p.llmProvider != null and #strings.equalsIgnoreCase(p.llmProvider, 'groq')}">
+                                Groq cloud
+                            </div>
+                            <div class="text-muted text-break mt-1"
+                                 th:unless="${p.llmProvider != null and #strings.equalsIgnoreCase(p.llmProvider, 'groq')}"
+                                 th:text="${p.llmUrl != null ? #strings.abbreviate(p.llmUrl, 50) : '—'}">—</div>
                         </td>
-                        <td>
-                            <span th:text="${p.schedulerDateRangeDays != null ? p.schedulerDateRangeDays : '-'}">-</span>
-                            <span> / </span>
-                            <span th:text="${p.schedulerMaxEmails != null ? p.schedulerMaxEmails : '-'}">-</span>
-                        </td>
+                        <td class="text-break"
+                            th:text="${p.llmModel != null ? #strings.abbreviate(p.llmModel, 50) : '-'}">-</td>
+                        <td class="text-break"
+                            th:text="${p.mailUsername != null ? #strings.abbreviate(p.mailUsername, 50) : '-'}">-</td>
+                        <td class="text-break"
+                            th:text="${p.systemPrompt != null ? #strings.abbreviate(p.systemPrompt, 50) : '-'}">-</td>
                         <td class="text-end">
                             <a class="btn btn-outline-primary btn-sm me-1" th:href="@{/settings/{id}(id=${p.id})}">
                                 Edit

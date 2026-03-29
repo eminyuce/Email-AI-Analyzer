@@ -7,6 +7,7 @@ import com.logilink.emailanalyzer.model.SettingsForm;
 import com.logilink.emailanalyzer.scheduler.EmailScheduler;
 import com.logilink.emailanalyzer.service.AppSettingsService;
 import com.logilink.emailanalyzer.service.JobProgressService;
+import com.logilink.emailanalyzer.service.OllamaTagsService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +18,7 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.util.List;
 import java.util.Map;
 
 @Controller
@@ -28,17 +30,20 @@ public class SettingsController {
     private final EmailScheduler emailScheduler;
     private final AppSettingsMapper appSettingsMapper;
     private final JobProgressService jobProgressService;
+    private final OllamaTagsService ollamaTagsService;
 
     public SettingsController(
             AppSettingsService appSettingsService,
             EmailScheduler emailScheduler,
             AppSettingsMapper appSettingsMapper,
-            JobProgressService jobProgressService
+            JobProgressService jobProgressService,
+            OllamaTagsService ollamaTagsService
     ) {
         this.appSettingsService = appSettingsService;
         this.emailScheduler = emailScheduler;
         this.appSettingsMapper = appSettingsMapper;
         this.jobProgressService = jobProgressService;
+        this.ollamaTagsService = ollamaTagsService;
     }
 
     @GetMapping
@@ -148,6 +153,22 @@ public class SettingsController {
         );
         HttpStatus status = result.isSuccess() ? HttpStatus.OK : HttpStatus.BAD_REQUEST;
         return ResponseEntity.status(status).body(toConnectionTestResponse(result));
+    }
+
+    /**
+     * Lists Ollama models from {@code GET {baseUrl}/api/tags} (same as {@code ollama list}).
+     */
+    @GetMapping("/ollama/tags")
+    @ResponseBody
+    public ResponseEntity<?> ollamaTags(@RequestParam("baseUrl") String baseUrl) {
+        try {
+            List<String> names = ollamaTagsService.listModelNames(baseUrl);
+            return ResponseEntity.ok(names);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PostMapping("/test-ai")

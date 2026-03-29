@@ -82,34 +82,6 @@
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <strong>Live Logs (refresh every 3s)</strong>
-            <div class="d-flex gap-2 align-items-center">
-                <input id="logFilter" type="text" class="form-control form-control-sm" placeholder="Filter logs"
-                       style="width: 220px;">
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="autoScroll" checked>
-                    <label class="form-check-label small" for="autoScroll">Auto-scroll</label>
-                </div>
-                <div id="pollSpinner" class="spinner-border spinner-border-sm text-primary d-none" role="status"></div>
-            </div>
-        </div>
-        <div id="logContainer" class="card-body" style="height: 420px; overflow-y: auto;">
-            <table class="table table-sm table-striped align-middle mb-0">
-                <thead class="table-light sticky-top">
-                <tr>
-                    <th style="width: 180px;">Timestamp</th>
-                    <th style="width: 110px;">Level</th>
-                    <th style="width: 130px;">Status</th>
-                    <th>Message</th>
-                </tr>
-                </thead>
-                <tbody id="logTableBody"></tbody>
-            </table>
-        </div>
-    </div>
-
     <script th:inline="javascript">
         const statusSentence = document.getElementById('statusSentence');
         const statusReason = document.getElementById('statusReason');
@@ -121,11 +93,6 @@
         const totalCount = document.getElementById('totalCount');
         const runMeta = document.getElementById('runMeta');
         const progressBar = document.getElementById('progressBar');
-        const logTableBody = document.getElementById('logTableBody');
-        const logFilter = document.getElementById('logFilter');
-        const autoScroll = document.getElementById('autoScroll');
-        const logContainer = document.getElementById('logContainer');
-        const pollSpinner = document.getElementById('pollSpinner');
         const activeSettingsLink = document.getElementById('activeSettingsLink');
         const activeSettingId = document.getElementById('activeSettingId');
         const activeMailHost = document.getElementById('activeMailHost');
@@ -137,8 +104,6 @@
         const activeRangeAndMax = document.getElementById('activeRangeAndMax');
 
         let lastLogId = 0;
-        const knownLogIds = new Set();
-        const allRows = [];
         let pollInFlight = false;
 
         function toBadgeClass(status) {
@@ -206,67 +171,11 @@
             progressBar.className = 'progress-bar progress-bar-striped' + (statusText === 'RUNNING' ? ' progress-bar-animated' : '');
         }
 
-        function appendLogRows(entries) {
-            if (!entries || entries.length === 0) {
-                return;
-            }
-            const filter = (logFilter.value || '').toLowerCase().trim();
-            for (const entry of entries) {
-                if (knownLogIds.has(entry.id)) {
-                    continue;
-                }
-                knownLogIds.add(entry.id);
-                lastLogId = Math.max(lastLogId, entry.id);
-
-                const tr = document.createElement('tr');
-                if (entry.level === 'ERROR') {
-                    tr.classList.add('table-danger');
-                } else if (entry.level === 'WARN') {
-                    tr.classList.add('table-warning');
-                }
-
-                const timestamp = document.createElement('td');
-                timestamp.textContent = toLocalTime(entry.timestamp);
-                const level = document.createElement('td');
-                level.textContent = entry.level;
-                const status = document.createElement('td');
-                status.textContent = entry.status;
-                const message = document.createElement('td');
-                message.textContent = entry.message;
-
-                tr.appendChild(timestamp);
-                tr.appendChild(level);
-                tr.appendChild(status);
-                tr.appendChild(message);
-
-                allRows.push({id: entry.id, tr: tr, searchable: (entry.level + ' ' + entry.status + ' ' + entry.message).toLowerCase()});
-
-                if (!filter || (entry.level + ' ' + entry.status + ' ' + entry.message).toLowerCase().includes(filter)) {
-                    logTableBody.appendChild(tr);
-                }
-            }
-
-            if (autoScroll.checked) {
-                logContainer.scrollTop = logContainer.scrollHeight;
-            }
-        }
-
-        function applyFilter() {
-            const filter = (logFilter.value || '').toLowerCase().trim();
-            logTableBody.innerHTML = '';
-            for (const row of allRows) {
-                if (!filter || row.searchable.includes(filter)) {
-                    logTableBody.appendChild(row.tr);
-                }
-            }
-        }
-
         async function pollProgress() {
             if (pollInFlight) {
                 return;
             }
             pollInFlight = true;
-            pollSpinner.classList.remove('d-none');
             try {
                 const response = await fetch('/api/jobs/progress?sinceId=' + encodeURIComponent(lastLogId));
                 if (!response.ok) {
@@ -276,16 +185,16 @@
                 updateActiveSettings(payload.activeSettings);
                 const snapshot = payload.progress || {};
                 updateHeader(snapshot);
-                appendLogRows(snapshot.logs || []);
+                if (snapshot.lastLogId != null && snapshot.lastLogId >= lastLogId) {
+                    lastLogId = snapshot.lastLogId;
+                }
             } catch (e) {
                 // Keep polling even if one request fails.
             } finally {
                 pollInFlight = false;
-                pollSpinner.classList.add('d-none');
             }
         }
 
-        logFilter.addEventListener('input', applyFilter);
         pollProgress();
         setInterval(pollProgress, 3000);
     </script>
