@@ -127,99 +127,158 @@ public class EmailService {
             boolean unreadOnly,
             boolean useImplicitSsl
     ) throws MessagingException {
+
         MailStoreProtocol protocol = useImplicitSsl ? MailStoreProtocol.IMAPS : MailStoreProtocol.IMAP;
         Properties properties = buildMailProperties(settings, protocol.value(), useImplicitSsl);
         Session emailSession = Session.getInstance(properties);
 
         Store store = null;
         Folder emailFolder = null;
-        List<Message> folderMessages = new ArrayList<>();
+
         try {
             store = emailSession.getStore(protocol.value());
-            store.connect(settings.getMailHost(), settings.getMailPort(), settings.getMailUsername(), settings.getMailPassword());
+            store.connect(settings.getMailHost(), settings.getMailPort(),
+                    settings.getMailUsername(), settings.getMailPassword());
 
             emailFolder = store.getFolder("INBOX");
             emailFolder.open(Folder.READ_ONLY);
-            SearchTerm dateRange = new AndTerm(
+
+            // Secondary limit using message numbers to reduce load on large inboxes
+            int totalMessages = emailFolder.getMessageCount();
+            int messageNumberMultiplier = 5;           // You can tune this (higher = safer but more results)
+            int messageNumberLimit = Math.max(200, maxEmails * messageNumberMultiplier);
+            int fromMessageNumber = Math.max(1, totalMessages - messageNumberLimit + 1);
+
+            // Build search terms
+            SearchTerm dateRangeTerm = new AndTerm(
                     new ReceivedDateTerm(ComparisonTerm.GE, startDate),
                     new ReceivedDateTerm(ComparisonTerm.LE, endDate)
             );
-            SearchTerm combinedTerm = dateRange;
+
+            SearchTerm combinedTerm = new AndTerm(dateRangeTerm, new MessageNumberTerm(fromMessageNumber));
+
             if (unreadOnly) {
                 SearchTerm unreadTerm = new FlagTerm(new Flags(Flags.Flag.SEEN), false);
-                combinedTerm = new AndTerm(dateRange, unreadTerm);
+                combinedTerm = new AndTerm(combinedTerm, unreadTerm);
             }
+
             Message[] foundMessages = emailFolder.search(combinedTerm);
-            log.info(
-                    "Found {} total {} messages in date range via {}. Limiting to {}",
+
+            log.info("Found {} {} messages (msg# >= {}) via {}. Limiting to max {}",
                     foundMessages.length,
                     unreadOnly ? "unread" : "matching",
+                    fromMessageNumber,
                     protocol.value().toUpperCase(),
-                    maxEmails
-            );
+                    maxEmails);
 
-            int count = 0;
-            for (int i = foundMessages.length - 1; i >= 0 && count < maxEmails; i--) {
-                folderMessages.add(foundMessages[i]);
-                count++;
-            }
-
-            if (folderMessages.isEmpty()) {
+            if (foundMessages.length == 0) {
                 return List.of();
             }
+
+            // Sort by received date descending (newest first) and take only maxEmails
+            Arrays.sort(foundMessages, (m1, m2) -> {
+                try {
+                    Date d1 = getMessageDate(m1);
+                    Date d2 = getMessageDate(m2);
+                    if (d1 == null && d2 == null) return 0;
+                    if (d1 == null) return 1;
+                    if (d2 == null) return -1;
+                    return d2.compareTo(d1);
+                } catch (Exception e) {
+                    return 0;
+                }
+            });
+
+            int limit = Math.min(maxEmails, foundMessages.length);
+            List<Message> messagesToFetch = Arrays.asList(Arrays.copyOfRange(foundMessages, 0, limit));
+
+            // Optimized FetchProfile (BODYSTRUCTURE removed - it doesn't exist)
             FetchProfile fetchProfile = new FetchProfile();
             fetchProfile.add(FetchProfile.Item.ENVELOPE);
             fetchProfile.add(FetchProfile.Item.CONTENT_INFO);
             fetchProfile.add(FetchProfile.Item.FLAGS);
             fetchProfile.add(UIDFolder.FetchProfileItem.UID);
-            emailFolder.fetch(folderMessages.toArray(new Message[0]), fetchProfile);
-            // Jakarta Mail Message instances are invalid after the folder closes; snapshot fields now.
-            return materializeToDtos(folderMessages);
+
+            emailFolder.fetch(messagesToFetch.toArray(new Message[0]), fetchProfile);
+
+            return materializeToDtos(messagesToFetch);
+
         } finally {
             if (emailFolder != null && emailFolder.isOpen()) {
                 try {
                     emailFolder.close(false);
                 } catch (MessagingException e) {
-                    log.warn("Failed to close email folder cleanly: {}", e.getMessage());
+                    log.warn("Failed to close email folder cleanly", e);
                 }
             }
             if (store != null && store.isConnected()) {
                 try {
                     store.close();
                 } catch (MessagingException e) {
-                    log.warn("Failed to close email store cleanly: {}", e.getMessage());
+                    log.warn("Failed to close email store cleanly", e);
                 }
             }
         }
     }
 
-    private List<FetchedEmailDto> materializeToDtos(List<Message> connected) {
-        if (connected.isEmpty()) {
+    // Helper for safe date extraction during sorting
+    private Date getMessageDate(Message msg) {
+        try {
+            Date received = msg.getReceivedDate();
+            return (received != null) ? received : msg.getSentDate();
+        } catch (MessagingException e) {
+            return null;
+        }
+    }
+
+    private List<FetchedEmailDto> materializeToDtos(List<Message> messages) {
+        if (messages.isEmpty()) {
             return List.of();
         }
 
         long startTime = System.currentTimeMillis();
-        log.info("Materializing {} emails to DTOs sequentially to avoid IMAP folder deadlocks...", connected.size());
+        log.info("Materializing {} emails to DTOs sequentially...", messages.size());
 
-        List<FetchedEmailDto> out = new ArrayList<>(connected.size());
-        for (int i = 0; i < connected.size(); i++) {
-            Message message = connected.get(i);
+        List<FetchedEmailDto> out = new ArrayList<>(messages.size());
+        int successCount = 0;
+
+        for (int i = 0; i < messages.size(); i++) {
+            Message message = messages.get(i);
             try {
                 long msgStart = System.currentTimeMillis();
+
                 FetchedEmailDto dto = toFetchedEmailDto(message);
-                long msgEnd = System.currentTimeMillis();
+
+                long duration = System.currentTimeMillis() - msgStart;
                 out.add(dto);
-                log.info("Processed email [{}/{}]: '{}' ({} ms)", (i + 1), connected.size(), dto.getSubject(), (msgEnd - msgStart));
+                successCount++;
+
+                // Smart logging - reduce noise
+                if (duration > 400 || log.isDebugEnabled()) {
+                    log.info("Processed email [{}/{}]: '{}' ({} ms)",
+                            (i + 1), messages.size(), getSafeSubject(dto), duration);
+                }
+
             } catch (Exception e) {
-                log.warn("Skipping email that could not be read while IMAP folder was open: {}", e.getMessage());
+                log.warn("Failed to materialize email #{} - skipping",
+                        message.getMessageNumber(), e);
             }
         }
 
-        long endTime = System.currentTimeMillis();
-        log.info("Materialized {}/{} emails in {} ms", out.size(), connected.size(), (endTime - startTime));
+        long totalTime = System.currentTimeMillis() - startTime;
+        log.info("Successfully materialized {}/{} emails in {} ms (avg: {} ms/email)",
+                successCount, messages.size(), totalTime,
+                messages.size() > 0 ? totalTime / messages.size() : 0);
+
         return out;
     }
 
+    // Safe subject for logging
+    private String getSafeSubject(FetchedEmailDto dto) {
+        return (dto.getSubject() != null && !dto.getSubject().isBlank())
+                ? dto.getSubject()
+                : "<no subject>";
+    }
     private FetchedEmailDto toFetchedEmailDto(Message message) throws MessagingException, IOException {
         String emailId = getEmailId(message);
         String subject = message.getSubject();
