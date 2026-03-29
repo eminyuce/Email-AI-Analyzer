@@ -129,6 +129,19 @@ public class EmailService {
     ) throws MessagingException {
 
         MailStoreProtocol protocol = useImplicitSsl ? MailStoreProtocol.IMAPS : MailStoreProtocol.IMAP;
+        log.debug(
+                "fetchMessages start: protocol={}, implicitSsl={}, host={}, port={}, user={}, maxEmails={}, "
+                        + "dateRange=[{} .. {}], unreadOnly={}",
+                protocol.value(),
+                useImplicitSsl,
+                settings.getMailHost(),
+                settings.getMailPort(),
+                settings.getMailUsername(),
+                maxEmails,
+                startDate,
+                endDate,
+                unreadOnly);
+
         Properties properties = buildMailProperties(settings, protocol.value(), useImplicitSsl);
         Session emailSession = Session.getInstance(properties);
 
@@ -139,6 +152,7 @@ public class EmailService {
             store = emailSession.getStore(protocol.value());
             store.connect(settings.getMailHost(), settings.getMailPort(),
                     settings.getMailUsername(), settings.getMailPassword());
+            log.debug("fetchMessages: store connected");
 
             emailFolder = store.getFolder("INBOX");
             emailFolder.open(Folder.READ_ONLY);
@@ -148,6 +162,11 @@ public class EmailService {
             int messageNumberMultiplier = 5;           // You can tune this (higher = safer but more results)
             int messageNumberLimit = Math.max(200, maxEmails * messageNumberMultiplier);
             int fromMessageNumber = Math.max(1, totalMessages - messageNumberLimit + 1);
+            log.debug(
+                    "fetchMessages: inbox totalMessages={}, messageNumberLimit={}, fromMessageNumber={} (scan window)",
+                    totalMessages,
+                    messageNumberLimit,
+                    fromMessageNumber);
 
             // Build search terms
             SearchTerm dateRangeTerm = new AndTerm(
@@ -163,6 +182,7 @@ public class EmailService {
             }
 
             Message[] foundMessages = emailFolder.search(combinedTerm);
+            log.debug("fetchMessages: search returned {} raw matches", foundMessages.length);
 
             log.info("Found {} {} messages (msg# >= {}) via {}. Limiting to max {}",
                     foundMessages.length,
@@ -191,6 +211,27 @@ public class EmailService {
 
             int limit = Math.min(maxEmails, foundMessages.length);
             List<Message> messagesToFetch = Arrays.asList(Arrays.copyOfRange(foundMessages, 0, limit));
+            if (log.isDebugEnabled()) {
+                log.debug(
+                        "fetchMessages: after sort+limit, will fetch {} messages (limit={}, found={})",
+                        messagesToFetch.size(),
+                        limit,
+                        foundMessages.length);
+                for (int j = 0; j < messagesToFetch.size(); j++) {
+                    Message m = messagesToFetch.get(j);
+                    try {
+                        log.debug(
+                                "fetchMessages: candidate [{}] msgNum={}, uid={}",
+                                j + 1,
+                                m.getMessageNumber(),
+                                emailFolder instanceof UIDFolder uidFolder
+                                        ? uidFolder.getUID(m)
+                                        : "n/a");
+                    } catch (MessagingException e) {
+                        log.debug("fetchMessages: candidate [{}] msgNum=? (error: {})", j + 1, e.getMessage());
+                    }
+                }
+            }
 
             // Optimized FetchProfile (BODYSTRUCTURE removed - it doesn't exist)
             FetchProfile fetchProfile = new FetchProfile();
@@ -199,9 +240,15 @@ public class EmailService {
             fetchProfile.add(FetchProfile.Item.FLAGS);
             fetchProfile.add(UIDFolder.FetchProfileItem.UID);
 
+            log.debug(
+                    "fetchMessages: batch FETCH profile items=ENVELOPE,CONTENT_INFO,FLAGS,UID count={}",
+                    messagesToFetch.size());
             emailFolder.fetch(messagesToFetch.toArray(new Message[0]), fetchProfile);
+            log.debug("fetchMessages: batch FETCH completed, calling materializeToDtos");
 
-            return materializeToDtos(messagesToFetch);
+            List<FetchedEmailDto> dtos = materializeToDtos(messagesToFetch);
+            log.debug("fetchMessages end: materialized {} DTOs", dtos.size());
+            return dtos;
 
         } finally {
             if (emailFolder != null && emailFolder.isOpen()) {
@@ -233,17 +280,22 @@ public class EmailService {
 
     private List<FetchedEmailDto> materializeToDtos(List<Message> messages) {
         if (messages.isEmpty()) {
+            log.debug("materializeToDtos: no messages, returning empty list");
             return List.of();
         }
 
         long startTime = System.currentTimeMillis();
         log.info("Materializing {} emails to DTOs sequentially...", messages.size());
+        log.debug("materializeToDtos: begin batch size={}", messages.size());
 
         List<FetchedEmailDto> out = new ArrayList<>(messages.size());
         int successCount = 0;
 
         for (int i = 0; i < messages.size(); i++) {
             Message message = messages.get(i);
+            int msgNum = message.getMessageNumber();
+            log.debug("materializeToDtos: [{}/{}] start msgNum={}", i + 1, messages.size(), msgNum);
+
             try {
                 long msgStart = System.currentTimeMillis();
 
@@ -252,6 +304,19 @@ public class EmailService {
                 long duration = System.currentTimeMillis() - msgStart;
                 out.add(dto);
                 successCount++;
+
+                int contentLen = dto.getContent() != null ? dto.getContent().length() : 0;
+                int attCount = dto.getAttachments() != null ? dto.getAttachments().size() : 0;
+                log.debug(
+                        "materializeToDtos: [{}/{}] done msgNum={} emailId={} subject={} contentLen={} attachments={} {} ms",
+                        i + 1,
+                        messages.size(),
+                        msgNum,
+                        dto.getEmailId(),
+                        getSafeSubject(dto),
+                        contentLen,
+                        attCount,
+                        duration);
 
                 // Smart logging - reduce noise
                 if (duration > 400 || log.isDebugEnabled()) {
@@ -262,6 +327,7 @@ public class EmailService {
             } catch (Exception e) {
                 log.warn("Failed to materialize email #{} - skipping",
                         message.getMessageNumber(), e);
+                log.debug("materializeToDtos: [{}/{}] failed msgNum={}", i + 1, messages.size(), msgNum, e);
             }
         }
 
@@ -269,6 +335,11 @@ public class EmailService {
         log.info("Successfully materialized {}/{} emails in {} ms (avg: {} ms/email)",
                 successCount, messages.size(), totalTime,
                 messages.size() > 0 ? totalTime / messages.size() : 0);
+        log.debug(
+                "materializeToDtos: end success={}/{} totalMs={}",
+                successCount,
+                messages.size(),
+                totalTime);
 
         return out;
     }
