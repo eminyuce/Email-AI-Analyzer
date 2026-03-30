@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Email Report</title>
+</head>
+<body>
+
+<div layout:fragment="content">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom gap-2">
+        <h1 class="h2 mb-0">Email Report</h1>
+        <a class="btn btn-outline-primary" href="/emails">
+            <i class="bi bi-envelope me-1"></i> Open analyzed emails
+        </a>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header bg-white">
+            <h5 class="mb-0">Report Filter Scope</h5>
+        </div>
+        <div class="card-body">
+            <form th:action="@{/emails/report}" method="get" class="row g-3">
+                <div class="col-md-2">
+                    <label for="keyword" class="form-label">Keyword</label>
+                    <input type="text" class="form-control" id="keyword" name="keyword" th:value="${keyword}"
+                           placeholder="Subject, sender, or message body...">
+                </div>
+                <div class="col-md-2">
+                    <label for="settingId" class="form-label">Settings profile</label>
+                    <select class="form-select" id="settingId" name="settingId">
+                        <option value="" th:selected="${settingId == null}">All profiles</option>
+                        <option th:each="p : ${settingsProfiles}" th:value="${p.id}"
+                                th:selected="${settingId != null && settingId == p.id}"
+                                th:text="${'Profile #' + p.id + (p.active ? ' (active)' : '')}">1
+                        </option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <span class="form-label d-block">Criticality</span>
+                    <span class="form-text small d-block mb-1">All levels if none selected</span>
+                    <div class="row row-cols-2 g-1 small">
+                        <div class="col">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="criticalityLevels"
+                                       value="CRITICAL" id="cl-critical"
+                                       th:checked="${criticalityLevels != null && criticalityLevels.contains('CRITICAL')}">
+                                <label class="form-check-label" for="cl-critical">CRITICAL</label>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="criticalityLevels" value="HIGH"
+                                       id="cl-high"
+                                       th:checked="${criticalityLevels != null && criticalityLevels.contains('HIGH')}">
+                                <label class="form-check-label" for="cl-high">HIGH</label>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="criticalityLevels" value="MEDIUM"
+                                       id="cl-medium"
+                                       th:checked="${criticalityLevels != null && criticalityLevels.contains('MEDIUM')}">
+                                <label class="form-check-label" for="cl-medium">MEDIUM</label>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="criticalityLevels" value="LOW"
+                                       id="cl-low"
+                                       th:checked="${criticalityLevels != null && criticalityLevels.contains('LOW')}">
+                                <label class="form-check-label" for="cl-low">LOW</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <span class="form-label d-block">Score (0-100)</span>
+                    <span class="form-text small d-block mb-1">Optional min / max</span>
+                    <div class="row g-1">
+                        <div class="col-6">
+                            <input type="number" class="form-control form-control-sm" name="scoreMin" id="scoreMin"
+                                   min="0" max="100" placeholder="Min" th:value="${scoreMin}">
+                        </div>
+                        <div class="col-6">
+                            <input type="number" class="form-control form-control-sm" name="scoreMax" id="scoreMax"
+                                   min="0" max="100" placeholder="Max" th:value="${scoreMax}">
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-1">
+                    <span class="form-label d-block">Action</span>
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" id="actionNeeded" name="actionNeeded"
+                               value="true" th:checked="${actionNeeded == true}">
+                        <label class="form-check-label small" for="actionNeeded">Needed</label>
+                    </div>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-search me-1"></i> Refresh report
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Total Emails</div>
+                    <div class="h4 mb-0" th:text="${totalEmails}">0</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Average Score</div>
+                    <div class="h4 mb-0"><span th:text="${averageScore}">0</span>/100</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Critical Emails (Critical + High)</div>
+                    <div class="h4 mb-0 text-danger" th:text="${criticalEmailCount}">0</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Requiring Action</div>
+                    <div class="h4 mb-0">
+                        <span th:text="${actionRequiredPercentage}">0</span>%
+                        <span class="small text-muted" th:text="${'(' + actionRequiredCount + ')'}">(0)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="text-muted small">Received Today</div>
+                    <div class="h4 mb-0" th:text="${receivedTodayCount}">0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Criticality Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span>CRITICAL</span>
+                            <strong th:text="${criticalCount}">0</strong>
+                        </div>
+                        <div class="progress" role="progressbar" aria-label="Critical distribution">
+                            <div class="progress-bar bg-danger"
+                                 th:style="'width: ' + ${criticalCount * 100 / distributionMax} + '%'"></div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span>HIGH</span>
+                            <strong th:text="${highCount}">0</strong>
+                        </div>
+                        <div class="progress" role="progressbar" aria-label="High distribution">
+                            <div class="progress-bar bg-warning"
+                                 th:style="'width: ' + ${highCount * 100 / distributionMax} + '%'"></div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span>MEDIUM</span>
+                            <strong th:text="${mediumCount}">0</strong>
+                        </div>
+                        <div class="progress" role="progressbar" aria-label="Medium distribution">
+                            <div class="progress-bar bg-info"
+                                 th:style="'width: ' + ${mediumCount * 100 / distributionMax} + '%'"></div>
+                        </div>
+                    </div>
+                    <div class="mb-0">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span>LOW</span>
+                            <strong th:text="${lowCount}">0</strong>
+                        </div>
+                        <div class="progress" role="progressbar" aria-label="Low distribution">
+                            <div class="progress-bar bg-success"
+                                 th:style="'width: ' + ${lowCount * 100 / distributionMax} + '%'"></div>
+                        </div>
+                    </div>
+                    <p class="small text-muted mt-3 mb-0" th:if="${lowCount >= highCount + criticalCount}">
+                        Most emails are LOW, indicating lower overall risk at the moment.
+                    </p>
+                    <p class="small text-muted mt-3 mb-0" th:if="${lowCount < highCount + criticalCount}">
+                        HIGH/CRITICAL volume is meaningful; keep response queues monitored closely.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Average Criteria Scores</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span>Business Priority</span>
+                            <strong><span th:text="${avgBusinessPriority}">0</span>/40</strong>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar bg-primary" th:style="'width: ' + ${avgBusinessPriorityPct} + '%'"></div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span>Urgency</span>
+                            <strong><span th:text="${avgUrgency}">0</span>/30</strong>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar bg-warning" th:style="'width: ' + ${avgUrgencyPct} + '%'"></div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span>Action Required</span>
+                            <strong><span th:text="${avgActionRequired}">0</span>/20</strong>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar bg-info" th:style="'width: ' + ${avgActionRequiredPct} + '%'"></div>
+                        </div>
+                    </div>
+                    <div class="mb-0">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span>Financial Impact</span>
+                            <strong><span th:text="${avgFinancialImpact}">0</span>/10</strong>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar bg-success" th:style="'width: ' + ${avgFinancialImpactPct} + '%'"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Most Critical Emails</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light">
+                            <tr>
+                                <th>Subject</th>
+                                <th>Score</th>
+                                <th>Level</th>
+                                <th>Action</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="email : ${topCriticalEmails}">
+                                <td class="text-truncate" style="max-width: 16rem;">
+                                    <a th:href="@{/emails/{id}(id=${email.id})}" class="text-decoration-none"
+                                       th:title="${email.subject}"
+                                       th:text="${email.subject != null ? email.subject : '(No subject)'}">Email A</a>
+                                </td>
+                                <td><strong th:text="${email.criticalityScore}">92</strong></td>
+                                <td>
+                                    <span th:class="|badge ${email.criticalityLevel == 'CRITICAL' ? 'bg-danger' : (email.criticalityLevel == 'HIGH' ? 'bg-warning text-dark' : (email.criticalityLevel == 'MEDIUM' ? 'bg-info text-dark' : 'bg-secondary'))}|"
+                                          th:text="${email.criticalityLevel != null ? email.criticalityLevel : 'N/A'}">CRITICAL</span>
+                                </td>
+                                <td>
+                                    <span th:if="${email.actionNeeded}" class="badge bg-danger-subtle text-danger">Yes</span>
+                                    <span th:unless="${email.actionNeeded}" class="badge bg-success-subtle text-success">No</span>
+                                </td>
+                            </tr>
+                            <tr th:if="${topCriticalEmails == null || topCriticalEmails.isEmpty()}">
+                                <td colspan="4" class="text-center py-3 text-muted">No scored emails available.</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Emails Requiring Action</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light">
+                            <tr>
+                                <th>Subject</th>
+                                <th>Score</th>
+                                <th>Level</th>
+                                <th>Details</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="email : ${actionRequiredEmails}">
+                                <td class="text-truncate" style="max-width: 16rem;"
+                                    th:text="${email.subject != null ? email.subject : '(No subject)'}">Email B</td>
+                                <td th:text="${email.criticalityScore != null ? email.criticalityScore : '-'}">85</td>
+                                <td>
+                                    <span th:class="|badge ${email.criticalityLevel == 'CRITICAL' ? 'bg-danger' : (email.criticalityLevel == 'HIGH' ? 'bg-warning text-dark' : (email.criticalityLevel == 'MEDIUM' ? 'bg-info text-dark' : 'bg-secondary'))}|"
+                                          th:text="${email.criticalityLevel != null ? email.criticalityLevel : 'N/A'}">HIGH</span>
+                                </td>
+                                <td>
+                                    <a th:href="@{/emails/{id}(id=${email.id})}" class="btn btn-outline-primary btn-sm">Open</a>
+                                </td>
+                            </tr>
+                            <tr th:if="${actionRequiredEmails == null || actionRequiredEmails.isEmpty()}">
+                                <td colspan="4" class="text-center py-3 text-muted">No action-required emails found.</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header bg-white">
+            <h5 class="mb-0">Simple Insight</h5>
+        </div>
+        <div class="card-body">
+            <ul class="mb-0">
+                <li th:each="insight : ${insights}" th:text="${insight}">Insight text</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

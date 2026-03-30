@@ -69,6 +69,44 @@ public class EmailAnalysisController {
                 stakeholders,
                 settingIdLong,
                 pageable);
+
+        model.addAttribute("page", page);
+        model.addAttribute("keyword", keyword);
+        model.addAttribute("criticalityLevels", criticalityLevels);
+        model.addAttribute("scoreMin", scoreMinInt);
+        model.addAttribute("scoreMax", scoreMaxInt);
+        model.addAttribute("actionNeeded", actionNeeded);
+        model.addAttribute("dateFrom", dateFrom);
+        model.addAttribute("dateTo", dateTo);
+        model.addAttribute("stakeholders", stakeholders);
+        model.addAttribute("settingId", settingIdLong);
+        model.addAttribute("settingsProfiles", appSettingsService.listAll());
+
+        return "email/list";
+    }
+
+    @GetMapping("/report")
+    public String report(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) List<String> criticalityLevels,
+            @RequestParam(required = false) String scoreMin,
+            @RequestParam(required = false) String scoreMax,
+            @RequestParam(required = false) Boolean actionNeeded,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFrom,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateTo,
+            @RequestParam(required = false) List<String> stakeholders,
+            @RequestParam(required = false) String settingId,
+            Model model
+    ) {
+        Long settingIdLong = StringUtils.isBlank(settingId) ? null : Long.valueOf(settingId.trim());
+        Integer scoreMinInt = parseScoreBound(scoreMin, 0, 100);
+        Integer scoreMaxInt = parseScoreBound(scoreMax, 0, 100);
+        if (scoreMinInt != null && scoreMaxInt != null && scoreMinInt > scoreMaxInt) {
+            Integer swap = scoreMinInt;
+            scoreMinInt = scoreMaxInt;
+            scoreMaxInt = swap;
+        }
+
         List<EmailAnalysis> filteredEmails = service.searchAll(
                 keyword,
                 criticalityLevels,
@@ -154,7 +192,6 @@ public class EmailAnalysisController {
                 filteredEmails
         );
 
-        model.addAttribute("page", page);
         model.addAttribute("keyword", keyword);
         model.addAttribute("criticalityLevels", criticalityLevels);
         model.addAttribute("scoreMin", scoreMinInt);
@@ -187,8 +224,7 @@ public class EmailAnalysisController {
         model.addAttribute("topCriticalEmails", topCriticalEmails);
         model.addAttribute("actionRequiredEmails", actionRequiredEmails);
         model.addAttribute("insights", insights);
-
-        return "email/list";
+        return "email/report";
     }
 
     private static Integer parseScoreBound(String raw, int minAllowed, int maxAllowed) {
