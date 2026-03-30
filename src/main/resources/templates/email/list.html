@@ -11,6 +11,11 @@
     <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom gap-2">
         <h1 class="h2 mb-0">Analyzed Emails</h1>
         <div class="d-flex flex-wrap gap-2 align-items-center">
+            <button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#report-overview-section" aria-expanded="true"
+                    aria-controls="report-overview-section" id="toggle-report-overview">
+                <i class="bi bi-eye me-1"></i> Hide report
+            </button>
             <form th:action="@{/emails/delete-incomplete}" method="post" class="d-inline"
                   onsubmit="return confirm('Remove every analysis that has no score or no criticality level? Those messages can be analyzed again on the next run.');">
                 <button type="submit" class="btn btn-outline-warning"
@@ -46,6 +51,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 
+    <div class="collapse show" id="report-overview-section">
     <div class="row g-3 mb-4">
         <div class="col-6 col-lg">
             <div class="card h-100">
@@ -288,6 +294,7 @@
             </ul>
         </div>
     </div>
+    </div>
 
     <!-- Filters Section -->
     <div class="card mb-4">
@@ -500,8 +507,18 @@
             if (!form) return;
             var selectAll = document.getElementById('select-all-page');
             var btn = document.getElementById('delete-selected-btn');
+            var reportSection = document.getElementById('report-overview-section');
+            var reportToggle = document.getElementById('toggle-report-overview');
             function rowBoxes() {
                 return form.querySelectorAll('tbody input[type="checkbox"][name="ids"]');
+            }
+            function refreshReportToggle() {
+                if (!reportSection || !reportToggle) return;
+                var shown = reportSection.classList.contains('show');
+                reportToggle.innerHTML = shown
+                    ? '<i class="bi bi-eye me-1"></i> Hide report'
+                    : '<i class="bi bi-eye-slash me-1"></i> Show report';
+                reportToggle.setAttribute('aria-expanded', shown ? 'true' : 'false');
             }
             function refresh() {
                 var boxes = rowBoxes();
@@ -519,7 +536,12 @@
             form.addEventListener('change', function (e) {
                 if (e.target && e.target.name === 'ids') refresh();
             });
+            if (reportSection) {
+                reportSection.addEventListener('shown.bs.collapse', refreshReportToggle);
+                reportSection.addEventListener('hidden.bs.collapse', refreshReportToggle);
+            }
             refresh();
+            refreshReportToggle();
         })();
     </script>
 </div>
