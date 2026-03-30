@@ -24,7 +24,7 @@ public class EmailAnalysis {
     @EqualsAndHashCode.Include
     private Long id;
 
-    @Column(name = "email_id")
+    @Column(name = "email_id", length = 2048)
     @EqualsAndHashCode.Include
     private String emailId;
 

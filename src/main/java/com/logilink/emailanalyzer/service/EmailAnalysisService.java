@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 @Service
@@ -62,5 +63,26 @@ public class EmailAnalysisService {
             repository.deleteAllInBatch();
         }
         return total;
+    }
+
+    /**
+     * Deletes analyses by primary key. Removed rows no longer block re-processing
+     * {@link com.logilink.emailanalyzer.service.AnalysisService} uses {@code existsByEmailId}.
+     */
+    @Transactional
+    public long deleteByIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return 0;
+        }
+        List<Long> distinct = ids.stream().filter(Objects::nonNull).distinct().toList();
+        if (distinct.isEmpty()) {
+            return 0;
+        }
+        List<EmailAnalysis> existing = repository.findAllById(distinct);
+        if (existing.isEmpty()) {
+            return 0;
+        }
+        repository.deleteAllInBatch(existing);
+        return existing.size();
     }
 }

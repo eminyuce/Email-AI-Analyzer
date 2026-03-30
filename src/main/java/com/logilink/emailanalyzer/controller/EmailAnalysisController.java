@@ -75,4 +75,19 @@ public class EmailAnalysisController {
         redirectAttributes.addFlashAttribute("deletedCount", deletedCount);
         return "redirect:/emails";
     }
+
+    @PostMapping("/delete-selected")
+    public String deleteSelected(
+            @RequestParam(required = false) List<Long> ids,
+            RedirectAttributes redirectAttributes
+    ) {
+        if (ids == null || ids.isEmpty()) {
+            redirectAttributes.addFlashAttribute("deleteSelectedError", true);
+            return "redirect:/emails";
+        }
+        long deletedCount = service.deleteByIds(ids);
+        redirectAttributes.addFlashAttribute("deletedSelected", true);
+        redirectAttributes.addFlashAttribute("deletedSelectedCount", deletedCount);
+        return "redirect:/emails";
+    }
 }

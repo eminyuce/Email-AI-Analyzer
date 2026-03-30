@@ -22,6 +22,14 @@
         Deleted <span th:text="${deletedCount}">0</span> analyzed email(s).
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
+    <div class="alert alert-success alert-dismissible fade show" role="alert" th:if="${deletedSelected}">
+        Removed <span th:text="${deletedSelectedCount}">0</span> analysis record(s). Those messages can be analyzed again on the next run.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    <div class="alert alert-warning alert-dismissible fade show" role="alert" th:if="${deleteSelectedError}">
+        Select at least one email using the checkboxes, then choose Remove selected.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
 
     <!-- Filters Section -->
     <div class="card mb-4">
@@ -83,11 +91,22 @@
 
     <!-- Table Section -->
     <div class="card">
+        <form th:action="@{/emails/delete-selected}" method="post" id="bulk-delete-form"
+              onsubmit="return confirm('Remove the selected analysis records? Those emails can be processed again on the next analysis run.');">
+            <div class="card-body py-2 border-bottom d-flex flex-wrap align-items-center gap-2">
+                <button type="submit" class="btn btn-outline-danger btn-sm" id="delete-selected-btn" disabled>
+                    <i class="bi bi-trash me-1"></i> Remove selected
+                </button>
+                <span class="text-muted small">Removes saved results only; the same messages are eligible for analysis again.</span>
+            </div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
                     <tr>
+                        <th scope="col" class="text-center" style="width: 2.5rem;">
+                            <input type="checkbox" class="form-check-input" id="select-all-page" title="Select all on this page" aria-label="Select all on this page">
+                        </th>
                         <th>Score</th>
                         <th>Level</th>
                         <th>Profile</th>
@@ -102,6 +121,10 @@
                     </thead>
                     <tbody>
                     <tr th:each="email : ${page.content}">
+                        <td class="text-center align-middle">
+                            <input type="checkbox" class="form-check-input" name="ids" th:value="${email.id}"
+                                   th:attr="aria-label=${'Select ' + (email.subject != null ? email.subject : 'email')}">
+                        </td>
                         <td>
                             <span th:class="|badge rounded-pill ${email.criticalityScore >= 80 ? 'bg-danger' : (email.criticalityScore >= 50 ? 'bg-warning' : 'bg-success')}|"
                                   th:text="${email.criticalityScore}">
@@ -143,12 +166,13 @@
                         </td>
                     </tr>
                     <tr th:if="${page.isEmpty()}">
-                        <td colspan="10" class="text-center py-4">No analyzed emails found.</td>
+                        <td colspan="11" class="text-center py-4">No analyzed emails found.</td>
                     </tr>
                     </tbody>
                 </table>
             </div>
         </div>
+        </form>
 
         <!-- Pagination -->
         <div class="card-footer" th:if="${page.totalPages > 1}">
@@ -172,6 +196,34 @@
             </nav>
         </div>
     </div>
+    <script>
+        (function () {
+            var form = document.getElementById('bulk-delete-form');
+            if (!form) return;
+            var selectAll = document.getElementById('select-all-page');
+            var btn = document.getElementById('delete-selected-btn');
+            function rowBoxes() {
+                return form.querySelectorAll('tbody input[type="checkbox"][name="ids"]');
+            }
+            function refresh() {
+                var boxes = rowBoxes();
+                var checked = form.querySelectorAll('tbody input[type="checkbox"][name="ids"]:checked').length;
+                if (btn) btn.disabled = boxes.length === 0 || checked === 0;
+                if (selectAll && boxes.length > 0) {
+                    selectAll.checked = checked === boxes.length;
+                    selectAll.indeterminate = checked > 0 && checked < boxes.length;
+                }
+            }
+            selectAll.addEventListener('change', function () {
+                rowBoxes().forEach(function (cb) { cb.checked = selectAll.checked; });
+                refresh();
+            });
+            form.addEventListener('change', function (e) {
+                if (e.target && e.target.name === 'ids') refresh();
+            });
+            refresh();
+        })();
+    </script>
 </div>
 
 </body>

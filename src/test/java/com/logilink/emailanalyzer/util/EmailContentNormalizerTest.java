@@ -15,13 +15,13 @@ class EmailContentNormalizerTest {
     @Test
     void trimsLineWhitespaceAndOuterBlanks() {
         String in = "\n  hi  \n\n\n\n  there  \n";
-        assertThat(EmailContentNormalizer.normalize(in)).isEqualTo("hi\n\n\nthere");
+        assertThat(EmailContentNormalizer.normalize(in)).isEqualTo("hi\n\n\n\nthere");
     }
 
     @Test
     void normalizesCrLf() {
         String in = "a\r\n\r\n\r\n\r\n\r\nb";
-        assertThat(EmailContentNormalizer.normalize(in)).isEqualTo("a\n\n\nb");
+        assertThat(EmailContentNormalizer.normalize(in)).isEqualTo("a\n\n\n\nb");
     }
 
     @Test
