@@ -1,6 +1,7 @@
 package com.logilink.emailanalyzer.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.logilink.emailanalyzer.common.AppConstants;
 import com.logilink.emailanalyzer.common.LlmProviderType;
 import com.logilink.emailanalyzer.config.AppSecretsDebugProperties;
 import com.logilink.emailanalyzer.domain.AppSettings;
@@ -8,6 +9,8 @@ import com.logilink.emailanalyzer.exception.EmailAnalysisException;
 import com.logilink.emailanalyzer.model.EmailAnalysisResult;
 import com.logilink.emailanalyzer.model.FetchedEmailDto;
 import com.logilink.emailanalyzer.model.GroqRequest;
+import com.logilink.emailanalyzer.util.LlmJsonUtils;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,10 +28,6 @@ import java.util.Map;
 public class AIService {
 
     private static final Logger log = LoggerFactory.getLogger(AIService.class);
-
-    private static final String GROQ_JSON_DISCIPLINE = """
-            Output rule: respond with one JSON object only (no markdown fences, no commentary), using the field names expected by EmailAnalysisResult (e.g. email_id, email_date, subject, sender, criticality_score, criticality_level, breakdown, summary, key_risks, affected_stakeholders, action_needed, recommended_action, estimated_response_time, confidence).
-            """;
 
     private final AppSettingsService appSettingsService;
     private final GroqService groqService;
@@ -51,11 +50,19 @@ public class AIService {
         this.secretsDebug = secretsDebug;
     }
 
+    /**
+     * Runs LLM analysis for one email using the active profile’s provider (Groq or Ollama) and
+     * returns structured {@link EmailAnalysisResult} JSON from the model.
+     */
     public EmailAnalysisResult analyzeEmail(String emailId, String subject, String sender, String content,
                                             String inReplyTo, String references, List<FetchedEmailDto.AttachmentDto> attachments) {
         return analyzeEmail(emailId, subject, sender, content, inReplyTo, references, attachments, null);
     }
 
+    /**
+     * Same as {@link #analyzeEmail(String, String, String, String, String, String, List)} but allows a
+     * one-off system prompt override (non-blank) instead of the profile value.
+     */
     public EmailAnalysisResult analyzeEmail(String emailId, String subject, String sender, String content,
                                             String inReplyTo, String references, List<FetchedEmailDto.AttachmentDto> attachments,
                                             String systemPromptOverride) {
@@ -79,7 +86,7 @@ public class AIService {
             }
             userPromptBuilder.append("Content:\n").append(content);
 
-            if (attachments != null && !attachments.isEmpty()) {
+            if (CollectionUtils.isNotEmpty(attachments)) {
                 userPromptBuilder.append("\n\nAttachments:\n");
                 for (int i = 0; i < attachments.size(); i++) {
                     FetchedEmailDto.AttachmentDto attachment = attachments.get(i);
@@ -121,28 +128,11 @@ public class AIService {
 
         EmailAnalysisResult result = new EmailAnalysisResult();
         try {
-            result = objectMapper.readValue(cleanJson(response), EmailAnalysisResult.class);
+            result = objectMapper.readValue(LlmJsonUtils.cleanJson(response), EmailAnalysisResult.class);
         } catch (Exception e) {
             log.error("Failed to parse LLM response: {}", response);
         }
         return result;
-    }
-
-    private String cleanJson(String input) {
-        if (input == null || input.isBlank()) {
-            return "{}";
-        }
-
-        // Find the first '{' and the last '}'
-        int start = input.indexOf('{');
-        int end = input.lastIndexOf('}');
-
-        if (start != -1 && end != -1 && end > start) {
-            return input.substring(start, end + 1);
-        }
-
-        // Fallback: strip markdown if indices aren't found (unlikely for valid JSON)
-        return input.replace("```json", "").replace("```", "").trim();
     }
 
     private EmailAnalysisResult analyzeWithGroq(AppSettings settings, String systemPrompt, String userPrompt) {
@@ -161,13 +151,13 @@ public class AIService {
                 ? 0.3f
                 : settings.getLlmTemperature().floatValue();
 
-        String augmentedSystem = systemPrompt + "\n\n" + GROQ_JSON_DISCIPLINE;
+        String augmentedSystem = systemPrompt + "\n\n" + AppConstants.AiPrompts.GROQ_JSON_DISCIPLINE;
         List<GroqRequest.Message> messages = List.of(
                 new GroqRequest.Message("system", augmentedSystem),
                 new GroqRequest.Message("user", userPrompt)
         );
         String raw = groqService.chat(settings.getLlmModel(), messages, (double) temperature);
-        String json = unwrapModelJsonPayload(raw);
+        String json = LlmJsonUtils.unwrapModelJsonPayload(raw);
         try {
             return objectMapper.readValue(json, EmailAnalysisResult.class);
         } catch (Exception e) {
@@ -194,24 +184,6 @@ public class AIService {
 
         OllamaChatModel chatModel = new OllamaChatModel(ollamaApi, options);
         return ChatClient.builder(chatModel).build();
-    }
-
-    private static String unwrapModelJsonPayload(String raw) {
-        if (raw == null) {
-            return "";
-        }
-        String t = raw.trim();
-        if (t.startsWith("```")) {
-            int firstNl = t.indexOf('\n');
-            int fence = t.lastIndexOf("```");
-            if (firstNl >= 0 && fence > firstNl) {
-                t = t.substring(firstNl + 1, fence).trim();
-                if (t.regionMatches(true, 0, "json", 0, 4)) {
-                    t = t.substring(4).trim();
-                }
-            }
-        }
-        return t;
     }
 
     private static String normalizeBaseUrl(String llmUrl) {

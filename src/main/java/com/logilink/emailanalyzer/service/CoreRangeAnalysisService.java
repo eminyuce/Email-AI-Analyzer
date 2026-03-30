@@ -11,11 +11,8 @@ import com.logilink.emailanalyzer.repository.EmailAnalysisRepository;
 import com.logilink.emailanalyzer.util.EmailContentNormalizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -164,23 +161,5 @@ public class CoreRangeAnalysisService {
                 .estimatedResponseTime(result.getEstimatedResponseTime())
                 .confidence(result.getConfidence())
                 .build();
-    }
-
-    private String loadDefaultSystemPrompt() {
-        ClassPathResource resource = new ClassPathResource(AppConstants.Defaults.DEFAULT_SYSTEM_PROMPT_PATH);
-        try (var inputStream = resource.getInputStream()) {
-            String content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8).trim();
-            if (content.isBlank()) {
-                throw new IllegalStateException(
-                        "Default system prompt file is empty: " + AppConstants.Defaults.DEFAULT_SYSTEM_PROMPT_PATH
-                );
-            }
-            return content;
-        } catch (IOException e) {
-            throw new IllegalStateException(
-                    "Cannot read default system prompt file: " + AppConstants.Defaults.DEFAULT_SYSTEM_PROMPT_PATH,
-                    e
-            );
-        }
     }
 }

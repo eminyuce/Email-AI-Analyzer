@@ -503,7 +503,7 @@ public class EmailService {
                 // Smart logging - reduce noise
                 if (duration > 400 || log.isDebugEnabled()) {
                     log.info("Processed email [{}/{}]: '{}' ({} ms)",
-                            (i + 1), messages.size(), getSafeSubject(dto), duration);
+                            i + 1, messages.size(), getSafeSubject(dto), duration);
                 }
 
             } catch (Exception e) {

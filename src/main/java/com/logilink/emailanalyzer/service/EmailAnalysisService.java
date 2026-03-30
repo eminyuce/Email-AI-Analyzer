@@ -3,6 +3,7 @@ package com.logilink.emailanalyzer.service;
 import com.logilink.emailanalyzer.domain.EmailAnalysis;
 import com.logilink.emailanalyzer.repository.EmailAnalysisRepository;
 import com.logilink.emailanalyzer.repository.EmailAnalysisSpecification;
+import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -75,7 +76,7 @@ public class EmailAnalysisService {
      */
     @Transactional
     public long deleteByIds(List<Long> ids) {
-        if (ids == null || ids.isEmpty()) {
+        if (CollectionUtils.isEmpty(ids)) {
             return 0;
         }
         List<Long> distinct = ids.stream().filter(Objects::nonNull).distinct().toList();

@@ -1,10 +1,13 @@
 package com.logilink.emailanalyzer.util;
 
+import org.apache.commons.lang3.StringUtils;
+
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Normalizes email/plain-text bodies before persistence: trims line noise and caps consecutive blank lines.
+ * Normalizes email/plain-text bodies before persistence: trims line noise and caps consecutive
+ * blank lines.
  */
 public final class EmailContentNormalizer {
 
@@ -16,11 +19,14 @@ public final class EmailContentNormalizer {
     private EmailContentNormalizer() {
     }
 
+    /**
+     * Returns normalized text, or {@code null} when {@code input} is {@code null}.
+     */
     public static String normalize(String input) {
         if (input == null) {
             return null;
         }
-        if (input.isEmpty()) {
+        if (StringUtils.isEmpty(input)) {
             return "";
         }
 

@@ -1,5 +1,6 @@
 package com.logilink.emailanalyzer.model;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.util.List;
@@ -9,8 +10,8 @@ public record GroqRequest(
         String model,
         List<Message> messages,
         Double temperature,
-        Integer max_tokens
-) {
+        @JsonAlias("maxTokens") Integer max_tokens) {
+
     public GroqRequest(String model, List<Message> messages) {
         this(model, messages, null, null);
     }

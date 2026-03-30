@@ -1,5 +1,7 @@
 package com.logilink.emailanalyzer.util;
 
+import org.apache.commons.lang3.StringUtils;
+
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
@@ -15,12 +17,12 @@ public final class EmailDateParser {
     private EmailDateParser() {
     }
 
+    /**
+     * Parses LLM-provided date text into {@link LocalDateTime}, or {@code null} when not parseable.
+     */
     public static LocalDateTime parseLlmEmailDate(String raw) {
-        if (raw == null) {
-            return null;
-        }
-        String s = raw.trim();
-        if (s.isEmpty()) {
+        String s = StringUtils.trimToNull(raw);
+        if (s == null) {
             return null;
         }
         try {
