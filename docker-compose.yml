@@ -34,18 +34,22 @@ services:
     container_name: ollama
     ports:
       - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
               count: 1
-              capabilities: [gpu]
-    volumes:
-      - ollama_data:/root/.ollama
+              capabilities: [ gpu ]
     networks:
       - app-network
       - monitoring-network
+    runtime: nvidia
 
   app:
     build: .

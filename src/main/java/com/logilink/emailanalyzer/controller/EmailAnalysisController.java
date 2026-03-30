@@ -35,6 +35,8 @@ public class EmailAnalysisController {
     public String list(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) List<String> criticalityLevels,
+            @RequestParam(required = false) String scoreMin,
+            @RequestParam(required = false) String scoreMax,
             @RequestParam(required = false) Boolean actionNeeded,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime dateTo,
@@ -44,12 +46,30 @@ public class EmailAnalysisController {
             Model model
     ) {
         Long settingIdLong = StringUtils.isBlank(settingId) ? null : Long.valueOf(settingId.trim());
+        Integer scoreMinInt = parseScoreBound(scoreMin, 0, 100);
+        Integer scoreMaxInt = parseScoreBound(scoreMax, 0, 100);
+        if (scoreMinInt != null && scoreMaxInt != null && scoreMinInt > scoreMaxInt) {
+            Integer swap = scoreMinInt;
+            scoreMinInt = scoreMaxInt;
+            scoreMaxInt = swap;
+        }
         Page<EmailAnalysis> page = service.search(
-                keyword, criticalityLevels, actionNeeded, dateFrom, dateTo, stakeholders, settingIdLong, pageable);
+                keyword,
+                criticalityLevels,
+                scoreMinInt,
+                scoreMaxInt,
+                actionNeeded,
+                dateFrom,
+                dateTo,
+                stakeholders,
+                settingIdLong,
+                pageable);
 
         model.addAttribute("page", page);
         model.addAttribute("keyword", keyword);
         model.addAttribute("criticalityLevels", criticalityLevels);
+        model.addAttribute("scoreMin", scoreMinInt);
+        model.addAttribute("scoreMax", scoreMaxInt);
         model.addAttribute("actionNeeded", actionNeeded);
         model.addAttribute("dateFrom", dateFrom);
         model.addAttribute("dateTo", dateTo);
@@ -58,6 +78,18 @@ public class EmailAnalysisController {
         model.addAttribute("settingsProfiles", appSettingsService.listAll());
 
         return "email/list";
+    }
+
+    private static Integer parseScoreBound(String raw, int minAllowed, int maxAllowed) {
+        if (StringUtils.isBlank(raw)) {
+            return null;
+        }
+        try {
+            int v = Integer.parseInt(raw.trim());
+            return Math.min(maxAllowed, Math.max(minAllowed, v));
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 
     @GetMapping("/{id}")

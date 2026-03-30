@@ -50,12 +50,12 @@
     <div class="card mb-4">
         <div class="card-body">
             <form th:action="@{/emails}" method="get" class="row g-3">
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label for="keyword" class="form-label">Keyword</label>
                     <input type="text" class="form-control" id="keyword" name="keyword" th:value="${keyword}"
                            placeholder="Subject, sender, or message body…">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label for="settingId" class="form-label">Settings profile</label>
                     <select class="form-select" id="settingId" name="settingId">
                         <option value="" th:selected="${settingId == null}">All profiles</option>
@@ -65,34 +65,64 @@
                         </option>
                     </select>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label">Criticality</label>
-                    <div class="d-flex gap-2">
-                        <select class="form-select" name="criticalityLevels" multiple size="3">
-                            <option value="CRITICAL"
-                                    th:selected="${criticalityLevels != null && criticalityLevels.contains('CRITICAL')}">
-                                CRITICAL
-                            </option>
-                            <option value="HIGH"
-                                    th:selected="${criticalityLevels != null && criticalityLevels.contains('HIGH')}">
-                                HIGH
-                            </option>
-                            <option value="MEDIUM"
-                                    th:selected="${criticalityLevels != null && criticalityLevels.contains('MEDIUM')}">
-                                MEDIUM
-                            </option>
-                            <option value="LOW"
-                                    th:selected="${criticalityLevels != null && criticalityLevels.contains('LOW')}">LOW
-                            </option>
-                        </select>
+                <div class="col-md-3">
+                    <span class="form-label d-block">Criticality</span>
+                    <span class="form-text small d-block mb-1">All levels if none selected</span>
+                    <div class="row row-cols-2 g-1 small">
+                        <div class="col">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="criticalityLevels" value="CRITICAL"
+                                       id="cl-critical"
+                                       th:checked="${criticalityLevels != null && criticalityLevels.contains('CRITICAL')}">
+                                <label class="form-check-label" for="cl-critical">CRITICAL</label>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="criticalityLevels" value="HIGH"
+                                       id="cl-high"
+                                       th:checked="${criticalityLevels != null && criticalityLevels.contains('HIGH')}">
+                                <label class="form-check-label" for="cl-high">HIGH</label>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="criticalityLevels" value="MEDIUM"
+                                       id="cl-medium"
+                                       th:checked="${criticalityLevels != null && criticalityLevels.contains('MEDIUM')}">
+                                <label class="form-check-label" for="cl-medium">MEDIUM</label>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="criticalityLevels" value="LOW"
+                                       id="cl-low"
+                                       th:checked="${criticalityLevels != null && criticalityLevels.contains('LOW')}">
+                                <label class="form-check-label" for="cl-low">LOW</label>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="col-md-2">
-                    <label class="form-label">Action Needed</label>
-                    <div class="form-check">
+                    <span class="form-label d-block">Score (0–100)</span>
+                    <span class="form-text small d-block mb-1">Optional min / max</span>
+                    <div class="row g-1">
+                        <div class="col-6">
+                            <input type="number" class="form-control form-control-sm" name="scoreMin" id="scoreMin"
+                                   min="0" max="100" placeholder="Min" th:value="${scoreMin}">
+                        </div>
+                        <div class="col-6">
+                            <input type="number" class="form-control form-control-sm" name="scoreMax" id="scoreMax"
+                                   min="0" max="100" placeholder="Max" th:value="${scoreMax}">
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-1">
+                    <span class="form-label d-block">Action</span>
+                    <div class="form-check mt-2">
                         <input class="form-check-input" type="checkbox" id="actionNeeded" name="actionNeeded"
                                value="true" th:checked="${actionNeeded == true}">
-                        <label class="form-check-label" for="actionNeeded">Required</label>
+                        <label class="form-check-label small" for="actionNeeded">Needed</label>
                     </div>
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
@@ -198,17 +228,17 @@
                 <ul class="pagination justify-content-center mb-0">
                     <li class="page-item" th:classappend="${page.first ? 'disabled' : ''}">
                         <a class="page-link"
-                           th:href="@{/emails(page=${page.number - 1}, keyword=${keyword}, settingId=${settingId}, actionNeeded=${actionNeeded})}">Previous</a>
+                           th:href="@{/emails(page=${page.number - 1}, keyword=${keyword}, settingId=${settingId}, criticalityLevels=${criticalityLevels}, scoreMin=${scoreMin}, scoreMax=${scoreMax}, actionNeeded=${actionNeeded})}">Previous</a>
                     </li>
                     <li class="page-item" th:each="i : ${#numbers.sequence(0, page.totalPages - 1)}"
                         th:classappend="${page.number == i ? 'active' : ''}">
                         <a class="page-link"
-                           th:href="@{/emails(page=${i}, keyword=${keyword}, settingId=${settingId}, actionNeeded=${actionNeeded})}"
+                           th:href="@{/emails(page=${i}, keyword=${keyword}, settingId=${settingId}, criticalityLevels=${criticalityLevels}, scoreMin=${scoreMin}, scoreMax=${scoreMax}, actionNeeded=${actionNeeded})}"
                            th:text="${i + 1}">1</a>
                     </li>
                     <li class="page-item" th:classappend="${page.last ? 'disabled' : ''}">
                         <a class="page-link"
-                           th:href="@{/emails(page=${page.number + 1}, keyword=${keyword}, settingId=${settingId}, actionNeeded=${actionNeeded})}">Next</a>
+                           th:href="@{/emails(page=${page.number + 1}, keyword=${keyword}, settingId=${settingId}, criticalityLevels=${criticalityLevels}, scoreMin=${scoreMin}, scoreMax=${scoreMax}, actionNeeded=${actionNeeded})}">Next</a>
                     </li>
                 </ul>
             </nav>

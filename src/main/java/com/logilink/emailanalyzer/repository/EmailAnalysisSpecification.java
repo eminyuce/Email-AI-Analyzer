@@ -13,6 +13,8 @@ public class EmailAnalysisSpecification {
     public static Specification<EmailAnalysis> filter(
             String keyword,
             List<String> criticalityLevels,
+            Integer scoreMin,
+            Integer scoreMax,
             Boolean actionNeeded,
             LocalDateTime dateFrom,
             LocalDateTime dateTo,
@@ -37,6 +39,13 @@ public class EmailAnalysisSpecification {
 
             if (criticalityLevels != null && !criticalityLevels.isEmpty()) {
                 predicates.add(root.get("criticalityLevel").in(criticalityLevels));
+            }
+
+            if (scoreMin != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("criticalityScore"), scoreMin));
+            }
+            if (scoreMax != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("criticalityScore"), scoreMax));
             }
 
             if (actionNeeded != null) {

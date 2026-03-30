@@ -33,6 +33,8 @@ public class EmailAnalysisService {
     public Page<EmailAnalysis> search(
             String keyword,
             List<String> criticalityLevels,
+            Integer scoreMin,
+            Integer scoreMax,
             Boolean actionNeeded,
             LocalDateTime dateFrom,
             LocalDateTime dateTo,
@@ -43,6 +45,8 @@ public class EmailAnalysisService {
         Specification<EmailAnalysis> spec = EmailAnalysisSpecification.filter(
                 keyword,
                 criticalityLevels,
+                scoreMin,
+                scoreMax,
                 actionNeeded,
                 dateFrom,
                 dateTo,
