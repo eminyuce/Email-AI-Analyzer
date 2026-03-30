@@ -8,14 +8,22 @@
 <body>
 
 <div layout:fragment="content">
-    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-        <h1 class="h2">Analyzed Emails</h1>
-        <form th:action="@{/emails/delete-all}" method="post" class="d-inline"
-              onsubmit="return confirm('Delete all analyzed emails? This action cannot be undone.');">
-            <button type="submit" class="btn btn-outline-danger">
-                <i class="bi bi-trash me-1"></i>Delete All
-            </button>
-        </form>
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom gap-2">
+        <h1 class="h2 mb-0">Analyzed Emails</h1>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <form th:action="@{/emails/delete-incomplete}" method="post" class="d-inline"
+                  onsubmit="return confirm('Remove every analysis that has no score or no criticality level? Those messages can be analyzed again on the next run.');">
+                <button type="submit" class="btn btn-outline-warning" title="Deletes rows missing score or level (failed / partial analysis)">
+                    <i class="bi bi-bandaid me-1"></i> Remove incomplete
+                </button>
+            </form>
+            <form th:action="@{/emails/delete-all}" method="post" class="d-inline"
+                  onsubmit="return confirm('Delete all analyzed emails? This action cannot be undone.');">
+                <button type="submit" class="btn btn-outline-danger">
+                    <i class="bi bi-trash me-1"></i>Delete All
+                </button>
+            </form>
+        </div>
     </div>
 
     <div class="alert alert-success alert-dismissible fade show" role="alert" th:if="${deletedAll}">
@@ -28,6 +36,10 @@
     </div>
     <div class="alert alert-warning alert-dismissible fade show" role="alert" th:if="${deleteSelectedError}">
         Select at least one email using the checkboxes, then choose Remove selected.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    <div class="alert alert-success alert-dismissible fade show" role="alert" th:if="${deletedIncomplete}">
+        Removed <span th:text="${deletedIncompleteCount}">0</span> incomplete analysis record(s) (no score or no level). Those messages are eligible to run again.
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 

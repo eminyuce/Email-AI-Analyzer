@@ -85,4 +85,9 @@ public class EmailAnalysisService {
         repository.deleteAllInBatch(existing);
         return existing.size();
     }
+
+    @Transactional
+    public long deleteIncompleteCriticality() {
+        return repository.deleteWhereCriticalityIncomplete();
+    }
 }

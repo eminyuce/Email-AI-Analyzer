@@ -90,4 +90,12 @@ public class EmailAnalysisController {
         redirectAttributes.addFlashAttribute("deletedSelectedCount", deletedCount);
         return "redirect:/emails";
     }
+
+    @PostMapping("/delete-incomplete")
+    public String deleteIncomplete(RedirectAttributes redirectAttributes) {
+        long deletedCount = service.deleteIncompleteCriticality();
+        redirectAttributes.addFlashAttribute("deletedIncomplete", true);
+        redirectAttributes.addFlashAttribute("deletedIncompleteCount", deletedCount);
+        return "redirect:/emails";
+    }
 }
