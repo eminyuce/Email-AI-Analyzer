@@ -8,6 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.apache.commons.lang3.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -73,4 +74,8 @@ public class EmailAnalysisResult {
 
     @JsonProperty("confidence")
     private Integer confidence;
+
+    public boolean isNotProcessedByLLM() {
+        return StringUtils.isEmpty(criticalityLevel) || criticalityScore == null || criticalityScore < 0;
+    }
 }

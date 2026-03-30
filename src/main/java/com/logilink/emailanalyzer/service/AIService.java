@@ -38,6 +38,7 @@ public class AIService {
     @Value("${groq.api.key:}")
     private String groqApiKey;
 
+
     public AIService(
             AppSettingsService appSettingsService,
             GroqService groqService,
@@ -112,11 +113,36 @@ public class AIService {
 
     private EmailAnalysisResult analyzeWithOllama(AppSettings settings, String systemPrompt, String userPrompt) {
         ChatClient chatClient = createOllamaChatClient(settings);
-        return chatClient.prompt()
+        String response = chatClient.prompt()
                 .system(spec -> spec.text("{systemPrompt}").params(Map.of("systemPrompt", systemPrompt)))
                 .user(spec -> spec.text("{userPrompt}").params(Map.of("userPrompt", userPrompt)))
                 .call()
-                .entity(EmailAnalysisResult.class);
+                .content();
+
+        EmailAnalysisResult result = new EmailAnalysisResult();
+        try {
+            result = objectMapper.readValue(cleanJson(response), EmailAnalysisResult.class);
+        } catch (Exception e) {
+            log.error("Failed to parse LLM response: {}", response);
+        }
+        return result;
+    }
+
+    private String cleanJson(String input) {
+        if (input == null || input.isBlank()) {
+            return "{}";
+        }
+
+        // Find the first '{' and the last '}'
+        int start = input.indexOf('{');
+        int end = input.lastIndexOf('}');
+
+        if (start != -1 && end != -1 && end > start) {
+            return input.substring(start, end + 1);
+        }
+
+        // Fallback: strip markdown if indices aren't found (unlikely for valid JSON)
+        return input.replace("```json", "").replace("```", "").trim();
     }
 
     private EmailAnalysisResult analyzeWithGroq(AppSettings settings, String systemPrompt, String userPrompt) {

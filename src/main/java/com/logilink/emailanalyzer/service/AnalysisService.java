@@ -168,6 +168,11 @@ public class AnalysisService {
                     email.getReferences(),
                     email.getAttachments()
             );
+            if(result.isNotProcessedByLLM()){
+                log.info("Email {} is not processed by LLM. Skipping.", emailId);
+                jobProgressService.incrementSkipped("Email " + emailId + " is not processed by LLM. Skipped.");
+                return null;
+            }
             enrichResult(result, emailId, subject, sender, emailDate);
 
             // Save to DB
