@@ -57,6 +57,31 @@ public class EmailAnalysisService {
         return repository.findAll(spec, pageable);
     }
 
+    public List<EmailAnalysis> searchAll(
+            String keyword,
+            List<String> criticalityLevels,
+            Integer scoreMin,
+            Integer scoreMax,
+            Boolean actionNeeded,
+            LocalDateTime dateFrom,
+            LocalDateTime dateTo,
+            List<String> stakeholders,
+            Long settingId
+    ) {
+        Specification<EmailAnalysis> spec = EmailAnalysisSpecification.filter(
+                keyword,
+                criticalityLevels,
+                scoreMin,
+                scoreMax,
+                actionNeeded,
+                dateFrom,
+                dateTo,
+                stakeholders,
+                settingId
+        );
+        return repository.findAll(spec, Sort.by(Sort.Direction.DESC, "processedAt"));
+    }
+
     public Optional<EmailAnalysis> findById(Long id) {
         return repository.findById(id);
     }
