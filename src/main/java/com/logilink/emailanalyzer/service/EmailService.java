@@ -24,6 +24,7 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 
 @Service
@@ -92,10 +93,14 @@ public class EmailService {
                 maxEmails,
                 startDate,
                 endDate);
-        return fetchEmailsByRange(maxEmails, startDate, endDate, true);
+        return fetchEmailsByRange(maxEmails, startDate, endDate, true, null);
     }
 
     public List<FetchedEmailDto> fetchEmails(int maxEmails) {
+        return fetchEmails(maxEmails, null);
+    }
+
+    public List<FetchedEmailDto> fetchEmails(int maxEmails, Function<Collection<String>, Set<String>> existingEmailIdsLookup) {
         log.debug("fetchEmails: entry maxEmails={}, lookbackDays={}", maxEmails, DEFAULT_LOOKBACK_DAYS);
         if (maxEmails <= 0) {
             log.debug("fetchEmails: early exit (maxEmails<=0)");
@@ -106,7 +111,7 @@ public class EmailService {
         Date endDate = Date.from(now);
         Date startDate = Date.from(now.minus(DEFAULT_LOOKBACK_DAYS, ChronoUnit.DAYS));
         log.debug("fetchEmails: derived range [{} .. {}]", startDate, endDate);
-        List<FetchedEmailDto> out = fetchEmailsByRange(maxEmails, startDate, endDate, false);
+        List<FetchedEmailDto> out = fetchEmailsByRange(maxEmails, startDate, endDate, false, existingEmailIdsLookup);
         log.debug("fetchEmails: exit count={}", out.size());
         return out;
     }
@@ -117,16 +122,39 @@ public class EmailService {
                 maxEmails,
                 startDate,
                 endDate);
-        return fetchEmailsByRange(maxEmails, startDate, endDate, false);
+        return fetchEmailsByRange(maxEmails, startDate, endDate, false, null);
+    }
+
+    /**
+     * Loads full message bodies only for emails whose IDs are not returned by {@code existingEmailIdsLookup}.
+     */
+    public List<FetchedEmailDto> fetchEmailsByRange(
+            int maxEmails,
+            Date startDate,
+            Date endDate,
+            Function<Collection<String>, Set<String>> existingEmailIdsLookup
+    ) {
+        return fetchEmailsByRange(maxEmails, startDate, endDate, false, existingEmailIdsLookup);
     }
 
     public List<FetchedEmailDto> fetchEmailsByRange(int maxEmails, Date startDate, Date endDate, boolean unreadOnly) {
+        return fetchEmailsByRange(maxEmails, startDate, endDate, unreadOnly, null);
+    }
+
+    public List<FetchedEmailDto> fetchEmailsByRange(
+            int maxEmails,
+            Date startDate,
+            Date endDate,
+            boolean unreadOnly,
+            Function<Collection<String>, Set<String>> existingEmailIdsLookup
+    ) {
         log.debug(
-                "fetchEmailsByRange: entry maxEmails={}, startDate={}, endDate={}, unreadOnly={}",
+                "fetchEmailsByRange: entry maxEmails={}, startDate={}, endDate={}, unreadOnly={}, skipKnownIds={}",
                 maxEmails,
                 startDate,
                 endDate,
-                unreadOnly);
+                unreadOnly,
+                existingEmailIdsLookup != null);
         if (maxEmails <= 0) {
             log.debug("fetchEmailsByRange: early exit (maxEmails<=0)");
             return List.of();
@@ -146,7 +174,8 @@ public class EmailService {
         boolean preferImplicitSsl = shouldUseImplicitSsl(settings);
         log.debug("fetchEmailsByRange: preferImplicitSsl={}", preferImplicitSsl);
         try {
-            emails.addAll(fetchMessages(settings, maxEmails, startDate, endDate, unreadOnly, preferImplicitSsl));
+            emails.addAll(fetchMessages(
+                    settings, maxEmails, startDate, endDate, unreadOnly, preferImplicitSsl, existingEmailIdsLookup));
             log.debug(
                     "fetchEmailsByRange: first attempt OK — {} emails (unread filter: {})",
                     emails.size(),
@@ -161,7 +190,8 @@ public class EmailService {
                 log.warn("IMAPS handshake failed; retrying mailbox fetch with IMAP STARTTLS.");
                 emails.clear();
                 try {
-                    emails.addAll(fetchMessages(settings, maxEmails, startDate, endDate, unreadOnly, false));
+                    emails.addAll(fetchMessages(
+                            settings, maxEmails, startDate, endDate, unreadOnly, false, existingEmailIdsLookup));
                     log.debug(
                             "fetchEmailsByRange: STARTTLS retry OK — {} emails (unread filter: {})",
                             emails.size(),
@@ -188,7 +218,8 @@ public class EmailService {
             Date startDate,
             Date endDate,
             boolean unreadOnly,
-            boolean useImplicitSsl
+            boolean useImplicitSsl,
+            Function<Collection<String>, Set<String>> existingEmailIdsLookup
     ) throws MessagingException {
 
         MailStoreProtocol protocol = useImplicitSsl ? MailStoreProtocol.IMAPS : MailStoreProtocol.IMAP;
@@ -305,13 +336,46 @@ public class EmailService {
             });
             log.debug("fetchMessages: sorted {} messages by date (newest first)", foundMessages.length);
 
-            int limit = Math.min(maxEmails, foundMessages.length);
-            List<Message> messagesToFetch = Arrays.asList(Arrays.copyOfRange(foundMessages, 0, limit));
+            List<Message> messagesToFetch = new ArrayList<>(Math.min(maxEmails, foundMessages.length));
+            if (existingEmailIdsLookup != null) {
+                List<String> candidateIds = new ArrayList<>(foundMessages.length);
+                for (Message m : foundMessages) {
+                    try {
+                        candidateIds.add(getEmailId(m));
+                    } catch (MessagingException e) {
+                        log.debug(
+                                "fetchMessages: synthetic id for msgNum {} (resolve id: {})",
+                                m.getMessageNumber(),
+                                e.getMessage());
+                        candidateIds.add("MSG-" + m.getMessageNumber());
+                    }
+                }
+                Set<String> alreadyProcessed = candidateIds.isEmpty()
+                        ? Set.of()
+                        : Optional.ofNullable(existingEmailIdsLookup.apply(candidateIds)).orElseGet(Set::of);
+                int skippedKnown = 0;
+                for (int i = 0; i < foundMessages.length && messagesToFetch.size() < maxEmails; i++) {
+                    if (alreadyProcessed.contains(candidateIds.get(i))) {
+                        skippedKnown++;
+                        continue;
+                    }
+                    messagesToFetch.add(foundMessages[i]);
+                }
+                if (skippedKnown > 0) {
+                    log.info(
+                            "fetchMessages: skipped loading {} message body/bodies already present in database.",
+                            skippedKnown);
+                }
+            } else {
+                int limit = Math.min(maxEmails, foundMessages.length);
+                messagesToFetch.addAll(Arrays.asList(Arrays.copyOfRange(foundMessages, 0, limit)));
+            }
+
             if (log.isDebugEnabled()) {
                 log.debug(
-                        "fetchMessages: after sort+limit, will fetch {} messages (limit={}, found={})",
+                        "fetchMessages: after sort+limit, will fetch {} messages (maxEmails={}, found={})",
                         messagesToFetch.size(),
-                        limit,
+                        maxEmails,
                         foundMessages.length);
                 for (int j = 0; j < messagesToFetch.size(); j++) {
                     Message m = messagesToFetch.get(j);

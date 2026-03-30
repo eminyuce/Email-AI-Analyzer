@@ -17,6 +17,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Supplier;
 
 @Service
@@ -56,7 +57,9 @@ public class AnalysisService {
             if (maxEmails <= 0) {
                 return List.of();
             }
-            List<FetchedEmailDto> emails = emailService.fetchEmails(maxEmails);
+            List<FetchedEmailDto> emails = emailService.fetchEmails(
+                    maxEmails,
+                    ids -> ids.isEmpty() ? Set.of() : repository.findExistingEmailIdsIn(ids));
             return processMessages(emails);
         });
     }
@@ -66,7 +69,11 @@ public class AnalysisService {
             if (maxEmails <= 0) {
                 return List.of();
             }
-            List<FetchedEmailDto> emails = emailService.fetchEmailsByRange(maxEmails, startDate, endDate);
+            List<FetchedEmailDto> emails = emailService.fetchEmailsByRange(
+                    maxEmails,
+                    startDate,
+                    endDate,
+                    ids -> ids.isEmpty() ? Set.of() : repository.findExistingEmailIdsIn(ids));
             return processMessages(emails);
         });
     }

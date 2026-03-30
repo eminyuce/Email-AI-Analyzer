@@ -21,6 +21,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class CoreRangeAnalysisService {
@@ -52,7 +53,11 @@ public class CoreRangeAnalysisService {
         Date rangeEnd = Date.from(endDate.atZone(ZoneId.systemDefault()).toInstant());
         log.info("Starting core range analysis for {} emails from {} to {}", maxEmails, startDate, endDate);
 
-        List<FetchedEmailDto> emails = emailService.fetchEmailsByRange(maxEmails, rangeStart, rangeEnd);
+        List<FetchedEmailDto> emails = emailService.fetchEmailsByRange(
+                maxEmails,
+                rangeStart,
+                rangeEnd,
+                ids -> ids.isEmpty() ? Set.of() : emailAnalysisRepository.findExistingEmailIdsIn(ids));
         List<EmailAnalysisReportDto> reports = new ArrayList<>();
         List<String> errors = new ArrayList<>();
         int skippedCount = 0;
