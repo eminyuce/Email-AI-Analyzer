@@ -34,7 +34,9 @@ public class EmailService {
     private static final int DEFAULT_LOOKBACK_DAYS = 30;
     private static final int DEFAULT_IMAPS_PORT = 993;
     private static final long MAX_TOTAL_ATTACHMENT_SIZE = 200 * 1024 * 1024; // 200 MB
-    /** Larger buffer = fewer read/write iterations for big attachments. */
+    /**
+     * Larger buffer = fewer read/write iterations for big attachments.
+     */
     private static final int ATTACHMENT_COPY_BUFFER_SIZE = 64 * 1024;
     /**
      * Beyond this, building a full Jsoup DOM is often disproportionately slow; use a fast tag stripper instead.
@@ -530,6 +532,7 @@ public class EmailService {
                 ? dto.getSubject()
                 : "<no subject>";
     }
+
     private FetchedEmailDto toFetchedEmailDto(Message message) throws MessagingException, IOException {
         int msgNum = message.getMessageNumber();
         log.debug("toFetchedEmailDto: start msgNum={}", msgNum);
@@ -602,6 +605,7 @@ public class EmailService {
                 currentAttachmentSize.get());
         return built;
     }
+
     private List<String> getAddresses(Address[] addresses) {
         if (addresses == null) {
             return Collections.emptyList();
@@ -610,6 +614,7 @@ public class EmailService {
                 .map(Address::toString)
                 .toList();
     }
+
     private LocalDateTime resolveEmailDate(Message message) {
         try {
             Date sent = message.getSentDate();
@@ -769,9 +774,9 @@ public class EmailService {
      * Recursively extracts content (text/plain, text/html) and attachments from a Part.
      * Implements memory management for attachments, skipping if total size exceeds MAX_TOTAL_ATTACHMENT_SIZE.
      *
-     * @param part The Mime Part to process.
-     * @param contentBuilder StringBuilder to append text content to.
-     * @param attachments List to add AttachmentDto objects to.
+     * @param part                  The Mime Part to process.
+     * @param contentBuilder        StringBuilder to append text content to.
+     * @param attachments           List to add AttachmentDto objects to.
      * @param currentAttachmentSize AtomicLong tracking the current total size of attachments.
      */
     private void extractContentAndAttachments(Part part, StringBuilder contentBuilder,

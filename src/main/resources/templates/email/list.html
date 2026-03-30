@@ -13,7 +13,8 @@
         <div class="d-flex flex-wrap gap-2 align-items-center">
             <form th:action="@{/emails/delete-incomplete}" method="post" class="d-inline"
                   onsubmit="return confirm('Remove every analysis that has no score or no criticality level? Those messages can be analyzed again on the next run.');">
-                <button type="submit" class="btn btn-outline-warning" title="Deletes rows missing score or level (failed / partial analysis)">
+                <button type="submit" class="btn btn-outline-warning"
+                        title="Deletes rows missing score or level (failed / partial analysis)">
                     <i class="bi bi-bandaid me-1"></i> Remove incomplete
                 </button>
             </form>
@@ -31,7 +32,8 @@
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
     <div class="alert alert-success alert-dismissible fade show" role="alert" th:if="${deletedSelected}">
-        Removed <span th:text="${deletedSelectedCount}">0</span> analysis record(s). Those messages can be analyzed again on the next run.
+        Removed <span th:text="${deletedSelectedCount}">0</span> analysis record(s). Those messages can be analyzed
+        again on the next run.
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
     <div class="alert alert-warning alert-dismissible fade show" role="alert" th:if="${deleteSelectedError}">
@@ -39,7 +41,8 @@
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
     <div class="alert alert-success alert-dismissible fade show" role="alert" th:if="${deletedIncomplete}">
-        Removed <span th:text="${deletedIncompleteCount}">0</span> incomplete analysis record(s) (no score or no level). Those messages are eligible to run again.
+        Removed <span th:text="${deletedIncompleteCount}">0</span> incomplete analysis record(s) (no score or no level).
+        Those messages are eligible to run again.
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 
@@ -111,79 +114,82 @@
                 </button>
                 <span class="text-muted small">Removes saved results only; the same messages are eligible for analysis again.</span>
             </div>
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead class="table-light">
-                    <tr>
-                        <th scope="col" class="text-center" style="width: 2.5rem;">
-                            <input type="checkbox" class="form-check-input" id="select-all-page" title="Select all on this page" aria-label="Select all on this page">
-                        </th>
-                        <th>Score</th>
-                        <th>Level</th>
-                        <th>Profile</th>
-                        <th>Subject</th>
-                        <th>Sender</th>
-                        <th>Body preview</th>
-                        <th>Email Date</th>
-                        <th>Processed</th>
-                        <th>Action</th>
-                        <th>Details</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <tr th:each="email : ${page.content}">
-                        <td class="text-center align-middle">
-                            <input type="checkbox" class="form-check-input" name="ids" th:value="${email.id}"
-                                   th:attr="aria-label=${'Select ' + (email.subject != null ? email.subject : 'email')}">
-                        </td>
-                        <td>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                        <tr>
+                            <th scope="col" class="text-center" style="width: 2.5rem;">
+                                <input type="checkbox" class="form-check-input" id="select-all-page"
+                                       title="Select all on this page" aria-label="Select all on this page">
+                            </th>
+                            <th>Score</th>
+                            <th>Level</th>
+                            <th>Profile</th>
+                            <th>Subject</th>
+                            <th>Sender</th>
+                            <th>Body preview</th>
+                            <th>Email Date</th>
+                            <th>Processed</th>
+                            <th>Action</th>
+                            <th>Details</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="email : ${page.content}">
+                            <td class="text-center align-middle">
+                                <input type="checkbox" class="form-check-input" name="ids" th:value="${email.id}"
+                                       th:attr="aria-label=${'Select ' + (email.subject != null ? email.subject : 'email')}">
+                            </td>
+                            <td>
                             <span th:class="|badge rounded-pill ${email.criticalityScore >= 80 ? 'bg-danger' : (email.criticalityScore >= 50 ? 'bg-warning' : 'bg-success')}|"
                                   th:text="${email.criticalityScore}">
                             </span>
-                        </td>
-                        <td>
+                            </td>
+                            <td>
                             <span th:class="|badge ${email.criticalityLevel == 'CRITICAL' ? 'bg-danger' : (email.criticalityLevel == 'HIGH' ? 'bg-warning text-dark' : (email.criticalityLevel == 'MEDIUM' ? 'bg-info text-dark' : 'bg-secondary'))}|"
                                   th:text="${email.criticalityLevel}">
                             </span>
-                        </td>
-                        <td>
-                            <a th:if="${email.settingId != null}" th:href="@{/settings/{id}(id=${email.settingId})}"
-                               class="text-decoration-none" th:text="${'#' + email.settingId}">#1</a>
-                            <span th:if="${email.settingId == null}" class="text-muted">—</span>
-                        </td>
-                        <td class="text-truncate align-middle" style="max-width: 11rem;" th:title="${email.subject}"
-                            th:text="${email.subject != null ? email.subject : '—'}">Subject</td>
-                        <td class="text-truncate align-middle" style="max-width: 10rem;" th:title="${email.sender}"
-                            th:text="${email.sender != null ? email.sender : '—'}">Sender</td>
-                        <td class="small text-muted align-middle" style="max-width: 16rem;">
-                            <span th:if="${email.content == null || #strings.isEmpty(email.content)}">—</span>
-                            <span th:unless="${email.content == null || #strings.isEmpty(email.content)}"
-                                  th:text="${#strings.abbreviate(email.content, 120)}"
-                                  th:title="${email.content}">Preview</span>
-                        </td>
-                        <td th:text="${#temporals.format(email.emailDate, 'yyyy-MM-dd HH:mm')}">Date</td>
-                        <td th:text="${#temporals.format(email.processedAt, 'yyyy-MM-dd HH:mm')}">Processed</td>
-                        <td>
-                            <i th:if="${email.actionNeeded}" class="bi bi-exclamation-circle-fill text-danger"
-                               title="Action Needed"></i>
-                            <i th:unless="${email.actionNeeded}" class="bi bi-check-circle-fill text-success"
-                               title="No Action"></i>
-                        </td>
-                        <td>
-                            <a th:href="@{/emails/{id}(id=${email.id})}"
-                               class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-eye"></i>
-                            </a>
-                        </td>
-                    </tr>
-                    <tr th:if="${page.isEmpty()}">
-                        <td colspan="11" class="text-center py-4">No analyzed emails found.</td>
-                    </tr>
-                    </tbody>
-                </table>
+                            </td>
+                            <td>
+                                <a th:if="${email.settingId != null}" th:href="@{/settings/{id}(id=${email.settingId})}"
+                                   class="text-decoration-none" th:text="${'#' + email.settingId}">#1</a>
+                                <span th:if="${email.settingId == null}" class="text-muted">—</span>
+                            </td>
+                            <td class="text-truncate align-middle" style="max-width: 11rem;" th:title="${email.subject}"
+                                th:text="${email.subject != null ? email.subject : '—'}">Subject
+                            </td>
+                            <td class="text-truncate align-middle" style="max-width: 10rem;" th:title="${email.sender}"
+                                th:text="${email.sender != null ? email.sender : '—'}">Sender
+                            </td>
+                            <td class="small text-muted align-middle" style="max-width: 16rem;">
+                                <span th:if="${email.content == null || #strings.isEmpty(email.content)}">—</span>
+                                <span th:unless="${email.content == null || #strings.isEmpty(email.content)}"
+                                      th:text="${#strings.abbreviate(email.content, 120)}"
+                                      th:title="${email.content}">Preview</span>
+                            </td>
+                            <td th:text="${#temporals.format(email.emailDate, 'yyyy-MM-dd HH:mm')}">Date</td>
+                            <td th:text="${#temporals.format(email.processedAt, 'yyyy-MM-dd HH:mm')}">Processed</td>
+                            <td>
+                                <i th:if="${email.actionNeeded}" class="bi bi-exclamation-circle-fill text-danger"
+                                   title="Action Needed"></i>
+                                <i th:unless="${email.actionNeeded}" class="bi bi-check-circle-fill text-success"
+                                   title="No Action"></i>
+                            </td>
+                            <td>
+                                <a th:href="@{/emails/{id}(id=${email.id})}"
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        <tr th:if="${page.isEmpty()}">
+                            <td colspan="11" class="text-center py-4">No analyzed emails found.</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
         </form>
 
         <!-- Pagination -->

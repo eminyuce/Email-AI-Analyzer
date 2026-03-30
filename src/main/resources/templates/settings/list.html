@@ -51,7 +51,9 @@
                                   title="This profile is used for email processing">Active</span>
                         </td>
                         <td class="small text-nowrap text-muted"
-                            th:text="${p.updatedAt != null ? #temporals.format(p.updatedAt, 'yyyy-MM-dd HH:mm') : '—'}">—</td>
+                            th:text="${p.updatedAt != null ? #temporals.format(p.updatedAt, 'yyyy-MM-dd HH:mm') : '—'}">
+                            —
+                        </td>
                         <td class="small">
                             <span class="badge bg-secondary text-uppercase"
                                   th:text="${p.llmProvider != null ? p.llmProvider : 'ollama'}">ollama</span>
@@ -61,14 +63,18 @@
                             </div>
                             <div class="text-muted text-break mt-1"
                                  th:unless="${p.llmProvider != null and #strings.equalsIgnoreCase(p.llmProvider, 'groq')}"
-                                 th:text="${p.llmUrl != null ? #strings.abbreviate(p.llmUrl, 50) : '—'}">—</div>
+                                 th:text="${p.llmUrl != null ? #strings.abbreviate(p.llmUrl, 50) : '—'}">—
+                            </div>
                         </td>
                         <td class="text-break"
-                            th:text="${p.llmModel != null ? #strings.abbreviate(p.llmModel, 50) : '-'}">-</td>
+                            th:text="${p.llmModel != null ? #strings.abbreviate(p.llmModel, 50) : '-'}">-
+                        </td>
                         <td class="text-break"
-                            th:text="${p.mailUsername != null ? #strings.abbreviate(p.mailUsername, 50) : '-'}">-</td>
+                            th:text="${p.mailUsername != null ? #strings.abbreviate(p.mailUsername, 50) : '-'}">-
+                        </td>
                         <td class="text-break"
-                            th:text="${p.systemPrompt != null ? #strings.abbreviate(p.systemPrompt, 50) : '-'}">-</td>
+                            th:text="${p.systemPrompt != null ? #strings.abbreviate(p.systemPrompt, 50) : '-'}">-
+                        </td>
                         <td class="text-end">
                             <a class="btn btn-outline-primary btn-sm me-1" th:href="@{/settings/{id}(id=${p.id})}">
                                 Edit
