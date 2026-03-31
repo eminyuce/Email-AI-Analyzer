@@ -1,5 +1,5 @@
 target/*
-!target/your-app.jar
+!target/*.jar
 .git
 node_modules
 .idea
