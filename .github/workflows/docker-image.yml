@@ -40,6 +40,13 @@ jobs:
       - name: Build JAR
         run: mvn clean package -DskipTests
 
+      # After: Build JAR
+      - name: Normalize JAR name
+        run: |
+          JAR_FILE=$(ls target/*.jar | head -n 1)
+          echo "Using JAR: $JAR_FILE"
+          cp "$JAR_FILE" target/app.jar
+
       # 6. Prepare image name (safe)
       - name: Prepare image
         run: |
