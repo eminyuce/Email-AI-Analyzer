@@ -10,6 +10,8 @@ jobs:
 
     env:
       IMAGE_NAME: email-ai-analyzer
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
 
     steps:
       # 1. Checkout
@@ -38,27 +40,32 @@ jobs:
       - name: Build JAR
         run: mvn clean package -DskipTests
 
-      # 6. Prepare image name (latest only)
+      # 6. Prepare image name (safe)
       - name: Prepare image
         run: |
-          USER=$(echo "${{ secrets.DOCKER_USERNAME }}" | tr '[:upper:]' '[:lower:]')
-          echo "IMAGE=$USER/${IMAGE_NAME}:latest" >> $GITHUB_ENV
+          if [ -z "$DOCKER_USERNAME" ]; then
+            echo "⚠️ No Docker username, using local image"
+            echo "IMAGE=${IMAGE_NAME}:latest" >> $GITHUB_ENV
+          else
+            USER_LOWER=$(echo "$DOCKER_USERNAME" | tr '[:upper:]' '[:lower:]')
+            echo "IMAGE=$USER_LOWER/${IMAGE_NAME}:latest" >> $GITHUB_ENV
+          fi
 
-      # 7. Login to Docker Hub
+      # 7. Login to Docker Hub (FIXED)
       - name: Login to Docker Hub
-        if: ${{ secrets.DOCKER_USERNAME && secrets.DOCKER_PASSWORD }}
-        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+        if: ${{ env.DOCKER_USERNAME != '' && env.DOCKER_PASSWORD != '' }}
+        run: echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
 
       # 8. Build image
       - name: Build Docker image
         run: docker build -t $IMAGE .
 
-      # 9. Push image
+      # 9. Push image (FIXED)
       - name: Push Docker image
-        if: ${{ secrets.DOCKER_USERNAME && secrets.DOCKER_PASSWORD }}
+        if: ${{ env.DOCKER_USERNAME != '' && env.DOCKER_PASSWORD != '' }}
         run: docker push $IMAGE
 
-      # 10. Check if deploy credentials exist
+      # 10. Check deploy credentials
       - name: Check deploy credentials
         id: check_deploy
         run: |
@@ -71,7 +78,7 @@ jobs:
             echo "⚠️ Deploy skipped: Missing SSH credentials"
           fi
 
-      # 11. Deploy to server (ONLY if creds exist)
+      # 11. Deploy (only if creds exist)
       - name: Deploy to Ubuntu server
         if: ${{ steps.check_deploy.outputs.deploy == 'true' }}
         uses: appleboy/ssh-action@v1.0.3
@@ -96,7 +103,7 @@ jobs:
               --restart always \
               $IMAGE
 
-            echo "⏳ Waiting for app to start..."
+            echo "⏳ Waiting for app..."
             sleep 10
 
             echo "🔍 Health check..."
