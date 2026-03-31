@@ -22,8 +22,7 @@
 #   - Secure credential handling via environment variables
 #
 # USAGE:
-#   1. Copy this script to your project directory
-#   2. Set environment variables in .env file or export them
+#   1. Copy this script to your project d or export them
 #   3. Run: ./email-ai-analyzer-manager.sh
 #
 # REQUIRED ENVIRONMENT VARIABLES:

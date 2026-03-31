@@ -4,58 +4,102 @@ on:
   push:
     branches: ["master"]
 
-# CI: GitHub Actions Variables (Settings → Actions → Variables) for optional Maven: GROQ_API_KEY, DEBUG_LOG_SECRETS.
-# For Docker Hub push: set DOCKER_USERNAME and DOCKER_PASSWORD as repository Encrypted Secrets
-# (Settings → Secrets and variables → Actions → Secrets). Runtime deploy: SECURITY_USER, SECURITY_PASS, DB_*, etc. — see .env.example
-
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
 
     env:
       IMAGE_NAME: email-ai-analyzer
-      GROQ_API_KEY: ${{ vars.GROQ_API_KEY }}
-      DEBUG_LOG_SECRETS: ${{ vars.DEBUG_LOG_SECRETS || 'false' }}
 
     steps:
+      # 1. Checkout
       - name: Checkout source
         uses: actions/checkout@v4
 
+      # 2. Cache Maven
       - name: Cache Maven repository
         uses: actions/cache@v4
         with:
           path: ~/.m2
           key: maven-${{ hashFiles('**/pom.xml') }}
 
-      - name: Set up JDK 24 (Amazon Corretto)
+      # 3. Setup JDK 24
+      - name: Set up JDK 24
         uses: actions/setup-java@v4
         with:
           distribution: corretto
           java-version: 24
 
-      - name: Build with Maven
+      # 4. Run tests
+      - name: Run tests
+        run: mvn test
+
+      # 5. Build JAR
+      - name: Build JAR
         run: mvn clean package -DskipTests
 
-      - name: Prepare Docker image tag
-        id: prepare
+      # 6. Prepare image name (latest only)
+      - name: Prepare image
         run: |
-          if [ -n "${{ secrets.DOCKER_USERNAME }}" ] && [ -n "${{ secrets.DOCKER_PASSWORD }}" ]; then
-            DOCKER_USER_LOWER=$(echo "${{ secrets.DOCKER_USERNAME }}" | tr '[:upper:]' '[:lower:]')
-            echo "docker_image=${DOCKER_USER_LOWER}/${IMAGE_NAME}:latest" >> $GITHUB_OUTPUT
-            echo "push=true" >> $GITHUB_OUTPUT
+          USER=$(echo "${{ secrets.DOCKER_USERNAME }}" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE=$USER/${IMAGE_NAME}:latest" >> $GITHUB_ENV
+
+      # 7. Login to Docker Hub
+      - name: Login to Docker Hub
+        if: ${{ secrets.DOCKER_USERNAME && secrets.DOCKER_PASSWORD }}
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      # 8. Build image
+      - name: Build Docker image
+        run: docker build -t $IMAGE .
+
+      # 9. Push image
+      - name: Push Docker image
+        if: ${{ secrets.DOCKER_USERNAME && secrets.DOCKER_PASSWORD }}
+        run: docker push $IMAGE
+
+      # 10. Check if deploy credentials exist
+      - name: Check deploy credentials
+        id: check_deploy
+        run: |
+          if [ -n "${{ secrets.SERVER_HOST }}" ] && \
+             [ -n "${{ secrets.SERVER_USER }}" ] && \
+             [ -n "${{ secrets.SERVER_SSH_KEY }}" ]; then
+            echo "deploy=true" >> $GITHUB_OUTPUT
           else
-            echo "docker_image=${IMAGE_NAME}:ci" >> $GITHUB_OUTPUT
-            echo "push=false" >> $GITHUB_OUTPUT
+            echo "deploy=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Deploy skipped: Missing SSH credentials"
           fi
 
-      - name: Build Docker image
-        run: docker build -t "${{ steps.prepare.outputs.docker_image }}" .
+      # 11. Deploy to server (ONLY if creds exist)
+      - name: Deploy to Ubuntu server
+        if: ${{ steps.check_deploy.outputs.deploy == 'true' }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            set -e
 
-      - name: Login and push to Docker Hub
-        if: ${{ steps.prepare.outputs.push == 'true' }}
-        env:
-          DOCKER_USER: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_TOKEN: ${{ secrets.DOCKER_PASSWORD }}
-        run: |
-          echo "$DOCKER_TOKEN" | docker login -u "$DOCKER_USER" --password-stdin
-          docker push "${{ steps.prepare.outputs.docker_image }}"
+            echo "📦 Pulling latest image..."
+            docker pull $IMAGE
+
+            echo "🛑 Stopping old container..."
+            docker stop email-ai || true
+            docker rm email-ai || true
+
+            echo "🚀 Starting new container..."
+            docker run -d \
+              --name email-ai \
+              -p 8080:8080 \
+              --restart always \
+              $IMAGE
+
+            echo "⏳ Waiting for app to start..."
+            sleep 10
+
+            echo "🔍 Health check..."
+            curl -f http://localhost:8080/actuator/health || (echo "❌ Health check failed" && exit 1)
+
+            echo "✅ Deployment successful"
