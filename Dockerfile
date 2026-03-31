@@ -5,10 +5,6 @@ WORKDIR /app
 # Copy exact jar (avoid wildcard issues)
 COPY target/*.jar app.jar
 
-# Run as non-root user
-RUN addgroup -S spring && adduser -S spring -G spring
-USER spring
-
 EXPOSE 8080
 
 # JVM tuned for containers
