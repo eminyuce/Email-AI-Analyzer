@@ -24,7 +24,7 @@
 # USAGE:
 #   1. Copy this script to your project directory
 #   2. Set environment variables in .env file or export them
-#   3. Run: ./update-email-ai-analyzer.sh
+#   3. Run: ./email-ai-analyzer-manager.sh
 #
 # REQUIRED ENVIRONMENT VARIABLES:
 #   - DB_PASSWORD: Database password (change default: <change_me>)
@@ -147,6 +147,88 @@ DEFAULT_ENV="dev"
 
 # Note: Ollama/LLM settings are now loaded from database (email_user.app_settings)
 # No SPRING_AI_OLLAMA_BASE_URL environment variable is needed
+
+# Global variable to track selected database
+SELECTED_DB="${SELECTED_DB:-email_user}"
+MYSQL_USER="${MYSQL_USER:-root}"
+MYSQL_PASSWORD="${MYSQL_PASSWORD:-<change_me>}"
+MYSQL_CONTAINER="${MYSQL_CONTAINER:-email_db}"
+
+# Main menu state
+MAIN_MENU=1
+
+show_main_menu() {
+    echo "================================"
+    echo "  Email AI Analyzer - Main Menu"
+    echo "================================"
+    echo "Version: ${SCRIPT_VERSION} | Created: ${SCRIPT_CREATED}"
+    echo "Current environment: ${CURRENT_ENV}"
+    echo "================================"
+    echo "1. Email AI Analyzer Management"
+    echo "2. Ollama Model Management"
+    echo "3. MySQL Database Management"
+    echo "4. Show Version"
+    echo "5. Exit"
+    echo "================================"
+    echo -n "Select an option (1-5): "
+}
+
+show_email_analyzer_menu() {
+    echo "================================"
+    echo "  Email AI Analyzer Management"
+    echo "================================"
+    echo "Current environment: ${CURRENT_ENV}"
+    echo "================================"
+    echo "1. Set environment (local/dev/prod)"
+    echo "2. Start container only"
+    echo "3. Pull new image and restart container"
+    echo "4. Restart existing container"
+    echo "5. Stop container"
+    echo "6. View container logs"
+    echo "7. Stop ALL Email AI Analyzer containers"
+    echo "8. View LLM Settings (from database)"
+    echo "9. Update LLM Settings (in database)"
+    echo "10. Test AI Connection"
+    echo "11. Remove ALL Email AI Analyzer images"
+    echo "12. Check container status"
+    echo "13. Back to Main Menu"
+    echo "================================"
+    echo -n "Select an option (1-13): "
+}
+
+show_ollama_menu() {
+    echo "================================"
+    echo "  Ollama Model Management"
+    echo "================================"
+    echo "Ollama Container: logilink_ollama"
+    echo "================================"
+    echo "1. List all Ollama models"
+    echo "2. Download Ollama model"
+    echo "3. Start Ollama model (load into GPU)"
+    echo "4. Stop Ollama model (unload from GPU)"
+    echo "5. View running Ollama models"
+    echo "6. Restart Ollama with GPU"
+    echo "7. Back to Main Menu"
+    echo "================================"
+    echo -n "Select an option (1-7): "
+}
+
+show_mysql_menu() {
+    echo "================================"
+    echo "  MySQL Database Management"
+    echo "================================"
+    echo "Container: ${MYSQL_CONTAINER} | Database: ${SELECTED_DB}"
+    echo "================================"
+    echo "1. Connect to MySQL"
+    echo "2. Show databases"
+    echo "3. Select database"
+    echo "4. Show tables"
+    echo "5. Run SQL query"
+    echo "6. Show table structure"
+    echo "7. Back to Main Menu"
+    echo "================================"
+    echo -n "Select an option (1-7): "
+}
 
 validate_menu_choice() {
     local choice="$1"
@@ -300,11 +382,11 @@ check_status() {
     echo "================================"
     echo "  Email AI Analyzer Status"
     echo "================================"
-    
+
     # Check container status
     local container_status
     container_status=$(docker ps -a --filter "name=${CONTAINER_NAME}" --format '{{.Status}}' 2>/dev/null)
-    
+
     if [[ -z "${container_status}" ]]; then
         echo "Container: NOT FOUND"
         echo ""
@@ -313,12 +395,12 @@ check_status() {
         echo "Container: ${CONTAINER_NAME}"
         echo "Status: ${container_status}"
         echo ""
-        
+
         # Check if running
         if docker ps --filter "name=${CONTAINER_NAME}" --format '{{.Status}}' | grep -q "Up"; then
             echo "✓ Container is RUNNING"
             echo ""
-            
+
             # Get memory stats
             local mem_stats
             mem_stats=$(docker stats --no-stream --format "table {{.MemUsage}}" "${CONTAINER_NAME}" 2>/dev/null | tail -1)
@@ -327,7 +409,7 @@ check_status() {
                 echo "Memory Limit: 16GB"
             fi
             echo ""
-            
+
             echo "Access URLs:"
             echo "  - Local:      http://localhost:8081"
             echo "  - Production: https://my.logilink.tr"
@@ -336,7 +418,7 @@ check_status() {
             echo "  - Username: ${SECURITY_USER:-admin}"
             echo "  - Password: ${SECURITY_PASS:-<set SECURITY_PASS env var>}"
             echo ""
-            
+
             # Quick health check
             local health
             health=$(curl -s http://localhost:8081/actuator/health 2>/dev/null | head -c 100)
@@ -351,7 +433,7 @@ check_status() {
             echo "To start the container, select option 2."
         fi
     fi
-    
+
     echo ""
     echo "================================"
 }
@@ -445,7 +527,7 @@ view_llm_settings() {
         "USE ${SELECTED_DB}; SELECT llm_model FROM app_settings WHERE id = 1;" 2>&1 | grep -v Warning | tr -d '\r\n')
     llm_temp=$(docker exec ${MYSQL_CONTAINER} mysql -u ${MYSQL_USER} -p${MYSQL_PASSWORD} -N -e \
         "USE ${SELECTED_DB}; SELECT llm_temperature FROM app_settings WHERE id = 1;" 2>&1 | grep -v Warning | tr -d '\r\n')
-    
+
     if [[ -n "${llm_url}" && -n "${llm_model}" ]]; then
         echo "Current LLM Configuration:"
         echo "  URL:    ${llm_url}"
@@ -456,7 +538,7 @@ view_llm_settings() {
         echo "      No container restart needed to update."
     else
         echo "Failed to retrieve LLM settings from database."
-        echo "Make sure the database container (email_db) is running."
+        echo "Make sure the database container (${MYSQL_CONTAINER}) is running."
     fi
 }
 
@@ -505,7 +587,7 @@ update_llm_settings() {
         echo "ERROR: Temperature must be between 0.0 and 1.0."
         return 1
     fi
-    
+
     echo ""
     echo "Updating settings in database..."
 
@@ -513,7 +595,7 @@ update_llm_settings() {
     local result
     result=$(docker exec ${MYSQL_CONTAINER} mysql -u ${MYSQL_USER} -p${MYSQL_PASSWORD} -e \
         "USE ${SELECTED_DB}; UPDATE app_settings SET llm_url='${llm_url}', llm_model='${llm_model}', llm_temperature=${llm_temp} WHERE id = 1;" 2>&1 | grep -v Warning)
-    
+
     if [[ $? -eq 0 ]]; then
         echo "✓ LLM settings updated successfully!"
         echo ""
@@ -749,7 +831,7 @@ view_running_models() {
     
     echo ""
     echo "Note: Ollama models loaded in GPU provide faster response times."
-    echo "      Use option 17 to unload models when not needed."
+    echo "      Use option 4 to unload models when not needed."
 }
 
 restart_ollama_with_gpu() {
@@ -805,88 +887,6 @@ restart_ollama_with_gpu() {
 # =============================================================================
 # MySQL Database Management Functions
 # =============================================================================
-
-# Global variable to track selected database
-SELECTED_DB="${SELECTED_DB:-email_user}"
-MYSQL_USER="${MYSQL_USER:-root}"
-MYSQL_PASSWORD="${MYSQL_PASSWORD:-<change_me>}"
-MYSQL_CONTAINER="${MYSQL_CONTAINER:-email_db}"
-
-# Main menu state
-MAIN_MENU=1
-
-show_main_menu() {
-    echo "================================"
-    echo "  Email AI Analyzer - Main Menu"
-    echo "================================"
-    echo "Version: ${SCRIPT_VERSION} | Created: ${SCRIPT_CREATED}"
-    echo "Current environment: ${CURRENT_ENV}"
-    echo "================================"
-    echo "1. Email AI Analyzer Management"
-    echo "2. Ollama Model Management"
-    echo "3. MySQL Database Management"
-    echo "4. Show Version"
-    echo "5. Exit"
-    echo "================================"
-    echo -n "Select an option (1-5): "
-}
-
-show_email_analyzer_menu() {
-    echo "================================"
-    echo "  Email AI Analyzer Management"
-    echo "================================"
-    echo "Current environment: ${CURRENT_ENV}"
-    echo "================================"
-    echo "1. Set environment (local/dev/prod)"
-    echo "2. Start container only"
-    echo "3. Pull new image and restart container"
-    echo "4. Restart existing container"
-    echo "5. Stop container"
-    echo "6. View container logs"
-    echo "7. Stop ALL Email AI Analyzer containers"
-    echo "8. View LLM Settings (from database)"
-    echo "9. Update LLM Settings (in database)"
-    echo "10. Test AI Connection"
-    echo "11. Remove ALL Email AI Analyzer images"
-    echo "12. Check container status"
-    echo "13. Back to Main Menu"
-    echo "================================"
-    echo -n "Select an option (1-13): "
-}
-
-show_ollama_menu() {
-    echo "================================"
-    echo "  Ollama Model Management"
-    echo "================================"
-    echo "Ollama Container: logilink_ollama"
-    echo "================================"
-    echo "1. List all Ollama models"
-    echo "2. Download Ollama model"
-    echo "3. Start Ollama model (load into GPU)"
-    echo "4. Stop Ollama model (unload from GPU)"
-    echo "5. View running Ollama models"
-    echo "6. Restart Ollama with GPU"
-    echo "7. Back to Main Menu"
-    echo "================================"
-    echo -n "Select an option (1-7): "
-}
-
-show_mysql_menu() {
-    echo "================================"
-    echo "  MySQL Database Management"
-    echo "================================"
-    echo "Container: ${MYSQL_CONTAINER} | Database: ${SELECTED_DB}"
-    echo "================================"
-    echo "1. Connect to MySQL"
-    echo "2. Show databases"
-    echo "3. Select database"
-    echo "4. Show tables"
-    echo "5. Run SQL query"
-    echo "6. Show table structure"
-    echo "7. Back to Main Menu"
-    echo "================================"
-    echo -n "Select an option (1-7): "
-}
 
 connect_to_mysql() {
     echo "================================"
@@ -1028,6 +1028,7 @@ show_table_structure() {
 CURRENT_ENV="${DEFAULT_ENV}"
 
 echo "Email AI Analyzer - Docker Management Script"
+echo "Version: ${SCRIPT_VERSION}"
 echo "Default environment: ${CURRENT_ENV}"
 echo ""
 
